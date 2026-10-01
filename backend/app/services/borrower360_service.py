@@ -61,7 +61,7 @@ class Borrower360Service:
         device = None
 
         documents = []
-        source_documets = []
+        source_documents = []
 
         repayment_schedules = []
         repayments = []
