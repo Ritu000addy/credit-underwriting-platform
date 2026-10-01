@@ -74,12 +74,12 @@ class FeatureEngineeringService:
                 internal_history.repayment
             )
 
-            if (
-                internal_history.past_loans and len(internal_history.past_loans) > 0
-            ):
+            if internal_history.past_loans and len(internal_history.past_loans) > 0:
                 features.repayment_history_coverage = float(
                     len(internal_history.repayment) / len(internal_history.past_loans)
                 )
+            else:
+                features.repayment_history_coverage = 0.0
 
             features.internal_dpd_count = len(
                 internal_history.dpd
