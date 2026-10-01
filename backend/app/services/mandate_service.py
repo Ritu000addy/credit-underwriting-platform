@@ -1,0 +1,98 @@
+from sqlalchemy.orm import Session
+from datetime import datetime
+
+from backend.app.models.mandate import Mandate
+from backend.app.models.agreement import Agreement
+
+
+class MandateService:
+
+    def create_mandate(
+        self,
+        db: Session,
+        mandate_id: str,
+        application_id: str,
+        status: str,
+        mandate_reference: str | None = None,
+        mandate_type: str | None = None,
+        provider: str | None = None,
+        failure_reason: str | None = None,
+        completed_at=None,
+    ) -> Mandate:
+
+        agreement = (
+            db.query(Agreement)
+            .filter(
+                Agreement.application_id == application_id,
+                Agreement.agreement_status == "COMPLETED",
+                Agreement.esign_status == "SIGNED",
+            )
+            .order_by(Agreement.signed_at.desc())
+            .first()
+        )
+
+        if agreement is None:
+            raise ValueError("AGREEMENT_NOT_COMPLETED")
+
+        mandate = Mandate(
+            mandate_id=mandate_id,
+            application_id=application_id,
+            mandate_reference=mandate_reference,
+            mandate_type=mandate_type,
+            provider=provider,
+            status=status,
+            failure_reason=failure_reason,
+            completed_at=completed_at,
+        )
+
+        db.add(mandate)
+        db.commit()
+        db.refresh(mandate)
+
+        return mandate
+
+    def initiate_mandate(
+        self,
+        db: Session,
+        mandate: Mandate,
+    ) -> Mandate:
+
+        mandate.status = "INITIATED"
+        mandate.initiated_at = datetime.utcnow()
+        mandate.failure_reason = None
+
+        db.commit()
+        db.refresh(mandate)
+
+        return mandate
+
+    def complete_mandate(
+        self,
+        db: Session,
+        mandate: Mandate,
+        status: str,
+        failure_reason: str | None = None,
+        completed_at: datetime | None = None,
+    ) -> Mandate:
+
+        if status == "COMPLETED":
+            mandate.status = "COMPLETED"
+            mandate.completed_at = completed_at or datetime.utcnow()
+            mandate.failure_reason = None
+
+        elif status == "FAILED":
+            mandate.status = "FAILED"
+            mandate.failure_reason = failure_reason
+            mandate.completed_at = None
+
+        else:
+            raise ValueError(
+                "Invalid mandate status. Expected COMPLETED or FAILED."
+            )
+
+        db.commit()
+        db.refresh(mandate)
+
+        return mandate
+
+mandate_service = MandateService()
