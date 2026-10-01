@@ -82,6 +82,7 @@ def update_agreement_sign(
         db=db,
         agreement=agreement,
         esign_status=sign_request.esign_status,
+        esign_reference=sign_request.esign_reference,
         signed_at=sign_request.signed_at,
         failure_reason=sign_request.failure_reason,
     )

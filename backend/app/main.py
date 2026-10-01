@@ -31,6 +31,7 @@ from backend.app.api.routes.policy_validation import (
 )
 from backend.app.api.routes.aadhaar_kyc import router as aadhaar_kyc_router
 from backend.app.api.routes.genai_underwriting import router as genai_underwriting_router
+from backend.app.api.routes.manual_review import router as manual_review_router
 
 
 app = FastAPI(
@@ -64,6 +65,7 @@ app.include_router(underwriting_validation_router)
 app.include_router(policy_validation_router)
 app.include_router(aadhaar_kyc_router)
 app.include_router(genai_underwriting_router)
+app.include_router(manual_review_router)
 
 
 @app.get("/health")

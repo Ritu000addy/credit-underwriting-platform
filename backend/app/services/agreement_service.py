@@ -70,6 +70,7 @@ class AgreementService:
         db: Session,
         agreement: Agreement,
         esign_status: str,
+        esign_reference: str | None = None,
         signed_at: datetime | None = None,
         failure_reason: str | None = None,
     ) -> Agreement:
@@ -77,6 +78,7 @@ class AgreementService:
         if esign_status == "SIGNED":
             agreement.esign_status = "SIGNED"
             agreement.agreement_status = "COMPLETED"
+            agreement.esign_reference = esign_reference
             agreement.signed_at = signed_at or datetime.utcnow()
             agreement.failure_reason = None
 

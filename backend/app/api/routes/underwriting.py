@@ -7,6 +7,7 @@ from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.underwriting import UnderwritingResult
 from backend.app.services.credit_decision_service import credit_decision_service
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
+from backend.app.services.manual_review_service import manual_review_service
 
 from backend.app.models.loan_application import LoanApplication
 
@@ -51,6 +52,13 @@ def evaluate_application(
 
             db.commit()
             db.refresh(application_record)
+        
+        if result.decision.decision == "REFER":
+            manual_review_service.create_review(
+                db=db,
+                application_id=application.application_id,
+                review_reason=", ".join(result.decision.reason_codes),
+            )
 
     return result
 
