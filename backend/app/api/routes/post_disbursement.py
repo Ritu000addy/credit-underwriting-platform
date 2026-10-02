@@ -9,7 +9,7 @@ from backend.app.services.reconciliation_service import reconciliation_service
 
 router = APIRouter(
     prefix="/post-disbursement",
-    tags=["Post-Disbursement"],
+    tags=["Reconciliation"],
 )
 
 
@@ -73,7 +73,7 @@ def close_reconciliation(
         "reconciled_at": result.reconciled_at,
     }
 
-@router.post("/operations-queue/status")
+@router.post("/operations-queue")
 def update_operations_queue_status(
     queue_id: str,
     queue_status: str,

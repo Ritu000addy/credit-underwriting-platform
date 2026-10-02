@@ -14,7 +14,7 @@ from backend.app.models.loan_application import LoanApplication
 
 router = APIRouter(
     prefix="/underwriting",
-    tags=["Underwriting"],
+    tags=["AI Credit Underwriting"],
 )
 
 

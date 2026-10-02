@@ -36,7 +36,7 @@ from backend.app.services.audit_log_service import audit_log_service
 
 router = APIRouter(
     prefix="/disbursements",
-    tags=["Disbursements"],
+    tags=["Disbursement"],
 )
 
 # Create Beneficiary
@@ -144,28 +144,6 @@ def create_disbursement(
 
     return result
 
-# Get Disbursement
-@router.get(
-    "/{disbursement_id}",
-    response_model=DisbursementResponse,
-)
-def get_disbursement(
-    disbursement_id: str,
-    db: Session = Depends(get_db),
-):
-    result = db.get(
-        Disbursement,
-        disbursement_id,
-    )
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Disbursement not found",
-        )
-
-    return result
-
 # Update Disbursement
 @router.post(
     "/{disbursement_id}/status",
@@ -214,26 +192,6 @@ def update_disbursement_status(
         status_code=400,
         detail="Invalid disbursement status",
     )
-
-
-# Retry Disbursement
-@router.post("/{disbursement_id}/retry")
-def retry_disbursement(
-    disbursement_id: str,
-    db: Session = Depends(get_db),
-):
-    result = disbursement_retry_service.retry_disbursement(
-        db=db,
-        disbursement_id=disbursement_id,
-    )
-
-    if result.get("reason") == "DISBURSEMENT_NOT_FOUND":
-        raise HTTPException(
-            status_code=404,
-            detail="Disbursement not found",
-        )
-
-    return result
 
 # Bank Disbursement Webhook
 @router.post("/webhooks/bank")
@@ -329,3 +287,47 @@ def bank_disbursement_webhook(
         "disbursement_id": disbursement.disbursement_id,
         "status": disbursement.status,
     }
+
+
+# Retry Disbursement
+@router.post("/{disbursement_id}/retry")
+def retry_disbursement(
+    disbursement_id: str,
+    db: Session = Depends(get_db),
+):
+    result = disbursement_retry_service.retry_disbursement(
+        db=db,
+        disbursement_id=disbursement_id,
+    )
+
+    if result.get("reason") == "DISBURSEMENT_NOT_FOUND":
+        raise HTTPException(
+            status_code=404,
+            detail="Disbursement not found",
+        )
+
+    return result
+
+
+
+# Get Disbursement
+@router.get(
+    "/{disbursement_id}",
+    response_model=DisbursementResponse,
+)
+def get_disbursement(
+    disbursement_id: str,
+    db: Session = Depends(get_db),
+):
+    result = db.get(
+        Disbursement,
+        disbursement_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Disbursement not found",
+        )
+
+    return result

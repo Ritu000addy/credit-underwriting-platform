@@ -12,7 +12,7 @@ from backend.app.services.mandate_service import mandate_service
 
 router = APIRouter(
     prefix="/mandates",
-    tags=["Mandates"],
+    tags=["Mandate"],
 )
 
 

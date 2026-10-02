@@ -9,7 +9,7 @@ from backend.app.services.aadhaar_kyc_service import aadhaar_kyc_service
 
 router = APIRouter(
     prefix="/kyc/aadhaar",
-    tags=["Aadhaar KYC"],
+    tags=["Source Data Ingestion"],
 )
 
 @router.post(
@@ -56,7 +56,7 @@ def send_aadhaar_otp(
     return result
 
 @router.post(
-    "/verify", 
+    "/verify-otp", 
     response_model=AadhaarKYCResponse
 )
 def verify_aadhaar_otp(

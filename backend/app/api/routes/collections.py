@@ -87,45 +87,6 @@ def record_collection(
             detail=str(exc),
         )
 
-@router.get("/overdue")
-def get_overdue_schedules(
-    reference_date: datetime | None = None,
-    db: Session = Depends(get_db),
-):
-    if reference_date is None:
-        reference_date = datetime.utcnow()
-
-    return overdue_service.get_overdue_schedules(
-        db=db,
-        reference_date=reference_date,
-    )
-
-@router.get(
-    "/{application_id}/overdue-summary",
-    response_model=ApplicationOverdueSummaryResponse,
-)
-def get_application_overdue_summary(
-    application_id: str,
-    reference_date: datetime | None = None,
-    db: Session = Depends(get_db),
-):
-    if reference_date is None:
-        reference_date = datetime.utcnow()
-
-    try:
-        return overdue_service.get_application_overdue_summary(
-            db=db,
-            application_id=application_id,
-            reference_date=reference_date,
-        )
-
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
 @router.get(
     "/{application_id}",
     response_model=list[CollectionResponse],
@@ -145,7 +106,6 @@ def get_collections_by_application(
             status_code=400,
             detail=str(exc),
         )
-
 
 @router.get(
     "/{application_id}/{repayment_schedule_id}",
@@ -183,6 +143,46 @@ def get_collection_summary(
             db=db,
             application_id=application_id,
             repayment_schedule_id=repayment_schedule_id,
+        )
+
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+@router.get("/overdue")
+def get_overdue_schedules(
+    reference_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    if reference_date is None:
+        reference_date = datetime.utcnow()
+
+    return overdue_service.get_overdue_schedules(
+        db=db,
+        reference_date=reference_date,
+    )
+
+@router.get(
+    "/{application_id}/overdue-summary",
+    response_model=ApplicationOverdueSummaryResponse,
+)
+def get_application_overdue_summary(
+    application_id: str,
+    reference_date: datetime | None = None,
+    db: Session = Depends(get_db),
+):
+    if reference_date is None:
+        reference_date = datetime.utcnow()
+
+    try:
+        return overdue_service.get_application_overdue_summary(
+            db=db,
+            application_id=application_id,
+            reference_date=reference_date,
         )
 
     except Exception as exc:

@@ -11,7 +11,7 @@ from backend.app.services.customer_service import customer_service
 
 router = APIRouter(
     prefix="/customers",
-    tags=["Customers"],
+    tags=["LOS Origination"],
 )
 
 

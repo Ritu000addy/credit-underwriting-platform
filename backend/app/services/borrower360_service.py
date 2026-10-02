@@ -361,34 +361,28 @@ class Borrower360Service:
                     {
                         "document_id": document.document_id,
                         "document_type": document.document_type,
-                        "verification_status": (
-                            document.verification_status
-                        ),
-                        "document_reference": (
-                            document.document_reference
-                        ),
+                        "verification_status": document.verification_status,
+                        "document_reference": document.document_reference,
                         "document_name": document.document_name,
                         "extracted_data": document.extracted_data,
                     }
                     for document in documents
-                    if document.document_type.upper() == "PAYSLIP"
+                    if document.document_type
+                    and document.document_type.upper() in {"PAYSLIP", "SALARY_SLIP"}
                 ]
                 +
                 [
                     {
                         "document_id": document.document_id,
                         "document_type": document.document_type,
-                        "verification_status": (
-                            document.verification_status
-                        ),
-                        "document_reference": (
-                            document.document_reference
-                        ),
+                        "verification_status": document.verification_status,
+                        "document_reference": document.document_reference,
                         "document_name": document.document_name,
                         "extracted_data": document.extracted_data,
                     }
                     for document in source_documents
-                    if document.document_type.upper() == "PAYSLIP"
+                    if document.document_type
+                    and document.document_type.upper() in {"PAYSLIP", "SALARY_SLIP"}
                 ],
 
                 bank_statements=[

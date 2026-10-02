@@ -14,7 +14,7 @@ from backend.app.services.sanction_service import sanction_service
 
 router = APIRouter(
     prefix="/sanctions",
-    tags=["Sanctions"],
+    tags=["Sanction"],
 )
 
 

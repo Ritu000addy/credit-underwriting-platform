@@ -28,6 +28,16 @@ def create_lms_loan_account(
 ):
     return lms_service.create_loan_account(request)
 
+
+@router.post(
+    "/loan-status",
+    response_model=LMSLoanStatusResponse,
+)
+def update_lms_loan_status(
+    request: LMSLoanStatusRequest,
+):
+    return lms_service.update_loan_status(request)
+
 @router.post(
     "/repayment-schedules",
     response_model=LMSRepaymentScheduleResponse,
@@ -45,12 +55,3 @@ def create_lms_servicing_installment(
     request: LMSServicingInstallmentRequest,
 ):
     return lms_service.create_servicing_installment(request)
-
-@router.post(
-    "/loan-status",
-    response_model=LMSLoanStatusResponse,
-)
-def update_lms_loan_status(
-    request: LMSLoanStatusRequest,
-):
-    return lms_service.update_loan_status(request)

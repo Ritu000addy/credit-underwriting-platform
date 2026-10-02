@@ -8,7 +8,7 @@ from backend.app.services.application_service import application_service
 
 router = APIRouter(
     prefix="/applications",
-    tags=["Applications"],
+    tags=["LOS Origination"],
 )
 
 @router.post("")

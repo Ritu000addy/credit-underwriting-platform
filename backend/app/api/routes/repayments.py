@@ -18,7 +18,7 @@ from backend.app.services.repayment_service import repayment_service
 
 router = APIRouter(
     prefix="/repayments",
-    tags=["Repayments"],
+    tags=["Repayment"],
 )
 
 
@@ -73,29 +73,6 @@ def record_repayment(
         return repayment
 
     except ValueError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-@router.get(
-    "/schedule/{application_id}",
-    response_model=list[RepaymentScheduleResponse],
-)
-def get_repayment_schedule(
-    application_id: str,
-    db: Session = Depends(get_db),
-):
-    try:
-        schedule = repayment_schedule_service.get_schedule_by_application(
-            db=db,
-            application_id=application_id,
-        )
-
-        return schedule
-
-    except Exception as exc:
         db.rollback()
         raise HTTPException(
             status_code=400,

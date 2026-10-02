@@ -7,7 +7,7 @@ from backend.app.services.agreement_service import agreement_service
 
 router = APIRouter(
     prefix="/agreements",
-    tags=["Agreements"],
+    tags=["Agreement"],
 )
 
 
