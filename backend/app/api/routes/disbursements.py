@@ -127,6 +127,22 @@ def create_disbursement(
 
     if existing_disbursement is not None:
         return existing_disbursement
+
+    eligibility = disbursement_eligibility_service.check_eligibility(
+        db=db,
+        application_id=disbursement.application_id,
+        sanction_id=disbursement.sanction_id,
+        disbursement_amount=disbursement.disbursement_amount,
+    )
+
+    if not eligibility.eligible:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "DISBURSEMENT_NOT_ELIGIBLE",
+                "reasons": eligibility.reasons,
+            },
+        )
         
     disbursement_id = f"DISB-{uuid.uuid4().hex[:12].upper()}"
 

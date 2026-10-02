@@ -78,9 +78,15 @@ class AadhaarKYCService:
         payload = {
             "aadhar_number": aadhaar_number,
             "user_consent": user_consent,
-            "user_id": user_id,
-            "workflow_session_token": workflow_session_token,
+            #"user_id": user_id,
+            #"workflow_session_token": workflow_session_token,
         }
+
+        if user_id is not None:
+            payload["user_id"] = user_id
+
+        if workflow_session_token is not None:
+            payload["workflow_session_token"] = workflow_session_token
 
         response = requests.post(
             url,
