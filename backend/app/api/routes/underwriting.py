@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ from backend.app.schemas.underwriting import UnderwritingResult
 from backend.app.services.credit_decision_service import credit_decision_service
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
 from backend.app.services.manual_review_service import manual_review_service
+from backend.app.services.audit_log_service import audit_log_service
 
 from backend.app.models.loan_application import LoanApplication
 
@@ -52,6 +54,25 @@ def evaluate_application(
 
             db.commit()
             db.refresh(application_record)
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=result.decision.application_id,
+            actor_type="SYSTEM",
+            action="UNDERWRITING_DECISION",
+            entity_type="CREDIT_DECISION",
+            entity_reference=result.decision.decision_id,
+            description=(
+                f"AI underwriting decision generated: "
+                f"{result.decision.decision}"
+            ),
+            previous_state="UNDERWRITING_PENDING",
+            new_state=result.decision.decision,
+            request_reference=result.decision.application_id,
+            model_version=result.decision.model_version,
+            policy_version=result.decision.policy_version,
+        )
         
         if result.decision.decision == "REFER":
             manual_review_service.create_review(

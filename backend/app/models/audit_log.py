@@ -49,6 +49,21 @@ class AuditLog(Base):
         nullable=True,
     )
 
+    previous_state: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    new_state: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    request_reference: Mapped[str | None] = mapped_column(
+        String(150),
+        nullable=True,
+    )
+
     model_version: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,

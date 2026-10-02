@@ -13,6 +13,99 @@ class GenAIUnderwritingService:
         underwriting: UnderwritingResult,
     ) -> GenAIUnderwritingResult:
 
+        # ---------------------------------------------------------
+        # Underwriting data consistency validation
+        # ---------------------------------------------------------
+
+        if (
+            borrower.credit_bureau
+            and borrower.credit_bureau.score is not None
+            and underwriting.risk_assessment
+            and underwriting.risk_assessment.credit_score is not None
+            and borrower.credit_bureau.score
+            != underwriting.risk_assessment.credit_score
+        ):
+            raise ValueError(
+                "UNDERWRITING_DATA_INCONSISTENT: "
+                "Credit score does not match borrower bureau data."
+            )
+
+        if (
+            underwriting.risk_assessment
+            and underwriting.risk_assessment.credit_score is not None
+            and underwriting.decision
+            and underwriting.decision.credit_score is not None
+            and underwriting.risk_assessment.credit_score
+            != underwriting.decision.credit_score
+        ):
+            raise ValueError(
+                "UNDERWRITING_DATA_INCONSISTENT: "
+                "Credit score does not match the underwriting decision."
+            )
+
+        if (
+            underwriting.decision
+            and underwriting.application_id
+            != underwriting.decision.application_id
+        ):
+            raise ValueError(
+                "UNDERWRITING_DATA_INCONSISTENT: "
+                "Application ID does not match the credit decision."
+            )
+
+        if underwriting.risk_assessment and underwriting.decision:
+
+            risk = underwriting.risk_assessment
+            decision = underwriting.decision
+
+            consistency_fields = [
+                "risk_grade",
+                "probability_of_default",
+                "affordability_score",
+                "repayment_propensity",
+                "fraud_score",
+                "fraud_risk_level",
+                "fraud_confidence",
+                "income_stability_score",
+                "income_trend",
+                "risk_segment",
+                "recommended_amount",
+                "recommended_tenure",
+                "recommended_emi",
+                "foir",
+                "confidence",
+                "model_version",
+            ]
+
+            for field_name in consistency_fields:
+                risk_value = getattr(risk, field_name)
+                decision_value = getattr(decision, field_name)
+
+                if (
+                    risk_value is not None
+                    and decision_value is not None
+                    and risk_value != decision_value
+                ):
+                    raise ValueError(
+                        "UNDERWRITING_DATA_INCONSISTENT: "
+                        f"{field_name} does not match between "
+                        "risk assessment and credit decision."
+                    )
+
+            if risk.fraud_reason_codes != decision.fraud_reason_codes:
+                raise ValueError(
+                    "UNDERWRITING_DATA_INCONSISTENT: "
+                    "Fraud reason codes do not match between "
+                    "risk assessment and credit decision."
+                )
+
+            if risk.reason_codes != decision.reason_codes:
+                raise ValueError(
+                    "UNDERWRITING_DATA_INCONSISTENT: "
+                    "Reason codes do not match between "
+                    "risk assessment and credit decision."
+                )
+
         strengths: list[str] = []
         concerns: list[str] = []
         missing_information: list[str] = []

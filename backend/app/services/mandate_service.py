@@ -1,8 +1,11 @@
+import uuid
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from backend.app.models.mandate import Mandate
 from backend.app.models.agreement import Agreement
+
+from backend.app.services.audit_log_service import audit_log_service
 
 
 class MandateService:
@@ -34,6 +37,15 @@ class MandateService:
         if agreement is None:
             raise ValueError("AGREEMENT_NOT_COMPLETED")
 
+        existing_mandate = (
+            db.query(Mandate)
+            .filter(Mandate.application_id == application_id)
+            .first()
+        )
+
+        if existing_mandate is not None:
+            raise ValueError("MANDATE_ALREADY_EXISTS")
+
         mandate = Mandate(
             mandate_id=mandate_id,
             application_id=application_id,
@@ -57,6 +69,15 @@ class MandateService:
         mandate: Mandate,
     ) -> Mandate:
 
+        if mandate.status == "INITIATED":
+            raise ValueError("MANDATE_ALREADY_INITIATED")
+
+        if mandate.status == "COMPLETED":
+            raise ValueError("MANDATE_ALREADY_COMPLETED")
+
+        if mandate.status == "FAILED":
+            raise ValueError("MANDATE_NOT_ELIGIBLE_FOR_REINITIATION")
+
         mandate.status = "INITIATED"
         mandate.initiated_at = datetime.utcnow()
         mandate.failure_reason = None
@@ -75,6 +96,11 @@ class MandateService:
         completed_at: datetime | None = None,
     ) -> Mandate:
 
+        previous_status = mandate.status
+
+        if mandate.status != "INITIATED":
+            raise ValueError("MANDATE_NOT_INITIATED")
+
         if status == "COMPLETED":
             mandate.status = "COMPLETED"
             mandate.completed_at = completed_at or datetime.utcnow()
@@ -89,6 +115,23 @@ class MandateService:
             raise ValueError(
                 "Invalid mandate status. Expected COMPLETED or FAILED."
             )
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=mandate.application_id,
+            actor_type="SYSTEM",
+            action="MANDATE_COMPLETED" if status == "COMPLETED" else "MANDATE_FAILED",
+            entity_type="MANDATE",
+            entity_reference=mandate.mandate_id,
+            description=(
+                f"Mandate status changed from "
+                f"{previous_status} to {mandate.status}"
+            ),
+            previous_state=previous_status,
+            new_state=mandate.status,
+            request_reference=mandate.mandate_reference,
+        )
 
         db.commit()
         db.refresh(mandate)

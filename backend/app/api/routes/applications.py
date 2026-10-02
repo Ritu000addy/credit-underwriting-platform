@@ -16,20 +16,26 @@ def create_application(
     application: ApplicationCreate,
     db: Session = Depends(get_db),
 ):
-    result = application_service.create_application(
-        db=db,
-        application=application,
-    )
+    try:
+        result = application_service.create_application(
+            db=db,
+            application=application,
+        )
 
-    return {
-        "message": "Application created successfully",
-        "application": {
-            "application_id": result.application_id,
-            "customer_id": result.customer_id,
-            "requested_amount": result.requested_amount,
-            "status": result.status,
-        },
-    }
+        return {
+            "message": "Application created successfully",
+            "application": {
+                "application_id": result.application_id,
+                "customer_id": result.customer_id,
+                "requested_amount": result.requested_amount,
+                "status": result.status,
+            },
+        }
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
 
 @router.get("/{application_id}")

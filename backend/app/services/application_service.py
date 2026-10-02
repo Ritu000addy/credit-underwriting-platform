@@ -29,6 +29,14 @@ class ApplicationService:
             db.add(customer)
             db.flush()
 
+        existing_application = db.get(
+            LoanApplication,
+            application.application_id,
+        )
+
+        if existing_application is not None:
+            raise ValueError("APPLICATION_ALREADY_EXISTS")
+
         loan_application = LoanApplication(
             application_id=application.application_id,
             customer_id=application.customer_id,

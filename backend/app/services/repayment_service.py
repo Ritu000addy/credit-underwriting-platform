@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from backend.app.models.repayment import Repayment
 from backend.app.models.repayment_schedule import RepaymentSchedule
 
+from backend.app.services.audit_log_service import audit_log_service
+
 class RepaymentService:
 
     def create_repayment(
@@ -77,6 +79,8 @@ class RepaymentService:
         if schedule.status == "PAID":
             raise ValueError("INSTALLMENT_ALREADY_PAID")
 
+        previous_schedule_status = schedule.status
+
         if repayment_amount <= Decimal("0.00"):
             raise ValueError("INVALID_REPAYMENT_AMOUNT")
 
@@ -135,6 +139,22 @@ class RepaymentService:
             schedule.paid_at = paid_at
 
         db.add(repayment)
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=application_id,
+            actor_type="SYSTEM",
+            action="REPAYMENT_RECORDED",
+            entity_type="REPAYMENT",
+            entity_reference=repayment.repayment_id,
+            description=(
+                f"Repayment of {repayment_amount} recorded successfully."
+            ),
+            previous_state=previous_schedule_status,
+            new_state=schedule.status,
+            request_reference=repayment_reference,
+        )
         db.commit()
         db.refresh(repayment)
 

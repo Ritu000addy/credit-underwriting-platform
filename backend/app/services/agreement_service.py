@@ -1,9 +1,12 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from backend.app.models.agreement import Agreement
 
+from backend.app.services.audit_log_service import audit_log_service
+from backend.app.models.sanction import Sanction
 
 class AgreementService:
 
@@ -23,6 +26,17 @@ class AgreementService:
         initiated_at: datetime | None = None,
         signed_at: datetime | None = None,
     ) -> Agreement:
+
+        sanction = db.get(Sanction, sanction_id)
+
+        if sanction is None:
+            raise ValueError("SANCTION_NOT_FOUND")
+
+        if sanction.application_id != application_id:
+            raise ValueError("SANCTION_APPLICATION_MISMATCH")
+
+        if sanction.sanction_status != "APPROVED":
+            raise ValueError("SANCTION_NOT_APPROVED")
 
         agreement = Agreement(
             agreement_id=agreement_id,
@@ -53,6 +67,15 @@ class AgreementService:
         esign_reference: str,
     ) -> Agreement:
 
+        if agreement.agreement_status in {"COMPLETED", "CANCELLED"}:
+            raise ValueError("AGREEMENT_NOT_ELIGIBLE_FOR_ESIGN")
+
+        if agreement.esign_status == "INITIATED":
+            raise ValueError("ESIGN_ALREADY_INITIATED")
+
+        if agreement.esign_status == "SIGNED":
+            raise ValueError("ESIGN_ALREADY_COMPLETED")
+
         agreement.esign_provider = esign_provider
         agreement.esign_reference = esign_reference
         agreement.esign_status = "INITIATED"
@@ -75,6 +98,12 @@ class AgreementService:
         failure_reason: str | None = None,
     ) -> Agreement:
 
+        previous_agreement_status = agreement.agreement_status
+        previous_esign_status = agreement.esign_status
+
+        if agreement.esign_status != "INITIATED":
+            raise ValueError("ESIGN_NOT_INITIATED")
+
         if esign_status == "SIGNED":
             agreement.esign_status = "SIGNED"
             agreement.agreement_status = "COMPLETED"
@@ -91,6 +120,25 @@ class AgreementService:
             raise ValueError(
                 "Invalid eSign status. Expected SIGNED or FAILED."
             )
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=agreement.application_id,
+            actor_type="SYSTEM",
+            action="ESIGN_COMPLETED" if esign_status == "SIGNED" else "ESIGN_FAILED",
+            entity_type="AGREEMENT",
+            entity_reference=agreement.agreement_id,
+            description=(
+                f"eSign status changed from "
+                f"{previous_esign_status} to {agreement.esign_status}; "
+                f"agreement status changed from "
+                f"{previous_agreement_status} to {agreement.agreement_status}"
+            ),
+            previous_state=previous_agreement_status,
+            new_state=agreement.agreement_status,
+            request_reference=agreement.esign_reference,
+        )
 
         db.commit()
         db.refresh(agreement)

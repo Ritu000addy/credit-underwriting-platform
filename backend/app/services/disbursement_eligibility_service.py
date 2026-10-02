@@ -46,6 +46,7 @@ class DisbursementEligibilityService:
             db.query(Agreement)
             .filter(
                 Agreement.application_id == application_id,
+                Agreement.sanction_id == sanction_id,
                 Agreement.agreement_status == "COMPLETED",
                 Agreement.esign_status == "SIGNED",
             )

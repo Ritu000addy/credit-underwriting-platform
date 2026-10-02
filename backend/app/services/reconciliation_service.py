@@ -207,6 +207,9 @@ class ReconciliationService:
                     else ""
                 )
             ),
+            previous_state="PENDING",
+            new_state=result.status,
+            request_reference=disbursement.disbursement_id,
         )
 
         return result

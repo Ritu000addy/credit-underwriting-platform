@@ -222,6 +222,9 @@ def bank_disbursement_webhook(
             f"Bank webhook received with status "
             f"{webhook.status}"
         ),
+        previous_state=disbursement.status,
+        new_state=webhook.status,
+        request_reference=webhook.disbursement_id,
     )
 
     if disbursement.bank_reference != webhook.bank_reference:

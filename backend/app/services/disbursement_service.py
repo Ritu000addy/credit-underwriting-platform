@@ -9,6 +9,7 @@ from backend.app.models.internal_ledger import InternalLedger
 
 from backend.app.services.bank_routing_service import bank_routing_service
 from backend.app.services.internal_ledger_service import internal_ledger_service
+from backend.app.services.audit_log_service import audit_log_service
 
 
 class DisbursementService:
@@ -55,6 +56,8 @@ class DisbursementService:
         disbursement: Disbursement,
     ) -> Disbursement:
 
+        previous_status = disbursement.status
+
         routing_result = bank_routing_service.route_disbursement(
             payment_provider=disbursement.payment_provider,
             disbursement_id=disbursement.disbursement_id,
@@ -63,12 +66,42 @@ class DisbursementService:
         if not routing_result.success:
             disbursement.status = "FAILED"
             disbursement.failure_reason = routing_result.failure_reason
+            audit_log_service.log(
+                db=db,
+                audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+                application_id=disbursement.application_id,
+                actor_type="SYSTEM",
+                action="DISBURSEMENT_FAILED",
+                entity_type="DISBURSEMENT",
+                entity_reference=disbursement.disbursement_id,
+                description=(
+                    f"Disbursement initiation failed: "
+                    f"{routing_result.failure_reason}"
+                ),
+                previous_state=previous_status,
+                new_state="FAILED",
+                request_reference=disbursement.disbursement_id,
+            )
             db.commit()
             db.refresh(disbursement)
             return disbursement
 
         disbursement.status = "INITIATED"
         disbursement.bank_reference = routing_result.routing_reference
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=disbursement.application_id,
+            actor_type="SYSTEM",
+            action="DISBURSEMENT_INITIATED",
+            entity_type="DISBURSEMENT",
+            entity_reference=disbursement.disbursement_id,
+            description="Disbursement initiated successfully.",
+            previous_state=previous_status,
+            new_state="INITIATED",
+            request_reference=disbursement.disbursement_id,
+        )
 
         db.commit()
         db.refresh(disbursement)
@@ -102,7 +135,23 @@ class DisbursementService:
         disbursement: Disbursement,
     ) -> Disbursement:
 
+        previous_status = disbursement.status
+
         disbursement.status = "PROCESSING"
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=disbursement.application_id,
+            actor_type="SYSTEM",
+            action="DISBURSEMENT_PROCESSING",
+            entity_type="DISBURSEMENT",
+            entity_reference=disbursement.disbursement_id,
+            description="Disbursement moved to processing.",
+            previous_state=previous_status,
+            new_state="PROCESSING",
+            request_reference=disbursement.disbursement_id,
+        )
 
         db.commit()
         db.refresh(disbursement)
@@ -116,10 +165,26 @@ class DisbursementService:
         bank_reference: str | None = None,
     ) -> Disbursement:
 
+        previous_status = disbursement.status
+
         disbursement.status = "PROCESSED"
         disbursement.bank_reference = bank_reference
         disbursement.processed_at = datetime.utcnow()
         disbursement.failure_reason = None
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=disbursement.application_id,
+            actor_type="SYSTEM",
+            action="DISBURSEMENT_PROCESSED",
+            entity_type="DISBURSEMENT",
+            entity_reference=disbursement.disbursement_id,
+            description="Disbursement processed successfully.",
+            previous_state=previous_status,
+            new_state="PROCESSED",
+            request_reference=bank_reference,
+        )
 
         db.commit()
         db.refresh(disbursement)
@@ -133,8 +198,26 @@ class DisbursementService:
         failure_reason: str,
     ) -> Disbursement:
 
+        previous_status = disbursement.status
+
         disbursement.status = "FAILED"
         disbursement.failure_reason = failure_reason
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=disbursement.application_id,
+            actor_type="SYSTEM",
+            action="DISBURSEMENT_FAILED",
+            entity_type="DISBURSEMENT",
+            entity_reference=disbursement.disbursement_id,
+            description=(
+                f"Disbursement failed: {failure_reason}"
+            ),
+            previous_state=previous_status,
+            new_state="FAILED",
+            request_reference=disbursement.disbursement_id,
+        )
 
         db.commit()
         db.refresh(disbursement)

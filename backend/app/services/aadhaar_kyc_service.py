@@ -13,23 +13,23 @@ class AadhaarKYCService:
 
     def __init__(self):
         self.base_url = os.getenv(
-            "IDITO_BASE_URL",
+            "IDTO_BASE_URL",
             "",
         ).rstrip("/")
 
         self.client_id = os.getenv(
-            "IDITO_CLIENT_ID",
+            "IDTO_CLIENT_ID",
             "",
         )
 
         self.api_key = os.getenv(
-            "IDITO_API_KEY",
+            "IDTO_API_KEY",
             "",
         )
 
         self.timeout_seconds = int(
             os.getenv(
-                "IDITO_TIMEOUT_SECONDS",
+                "IDTO_TIMEOUT_SECONDS",
                 "30",
             )
         )

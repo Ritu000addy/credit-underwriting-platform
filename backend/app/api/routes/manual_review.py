@@ -1,3 +1,4 @@
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -12,6 +13,7 @@ from backend.app.schemas.manual_review import (
     ManualReviewDecision,
 )
 from backend.app.services.manual_review_service import manual_review_service
+from backend.app.services.audit_log_service import audit_log_service
 
 
 router = APIRouter(
@@ -135,6 +137,24 @@ def submit_manual_review_decision(
         "APPROVE": "APPROVED",
         "REJECT": "REJECTED",
     }[decision.reviewer_decision]
+
+    audit_log_service.log(
+        db=db,
+        audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+        application_id=application_id,
+        actor_type="USER",
+        actor_reference=decision.reviewer_id,
+        action="MANUAL_REVIEW_DECISION",
+        entity_type="MANUAL_REVIEW",
+        entity_reference=review.review_id,
+        description=(
+            f"Manual credit review completed with decision "
+            f"{decision.reviewer_decision}"
+        ),
+        previous_state="OPEN",
+        new_state="COMPLETED",
+        request_reference=application_id,
+    )
 
     db.commit()
     db.refresh(review)

@@ -30,12 +30,19 @@ def analyze_underwriting(
         )
 
     if borrower.customer_id and underwriting.application_id:
-        result = genai_underwriting_service.generate(
-            borrower=borrower,
-            underwriting=underwriting,
-        )
+        try:
+            result = genai_underwriting_service.generate(
+                borrower=borrower,
+                underwriting=underwriting,
+            )
 
-        return result
+            return result
+
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=str(exc),
+            )
 
     raise HTTPException(
         status_code=400,

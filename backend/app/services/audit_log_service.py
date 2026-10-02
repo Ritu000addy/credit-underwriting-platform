@@ -16,6 +16,9 @@ class AuditLogService:
         entity_type: str | None = None,
         entity_reference: str | None = None,
         description: str | None = None,
+        previous_state: str | None = None,
+        new_state: str | None = None,
+        request_reference: str | None = None,
         model_version: str | None = None,
         policy_version: str | None = None,
     ) -> AuditLog:
@@ -29,6 +32,9 @@ class AuditLogService:
             entity_type=entity_type,
             entity_reference=entity_reference,
             description=description,
+            previous_state=previous_state,
+            new_state=new_state,
+            request_reference=request_reference,
             model_version=model_version,
             policy_version=policy_version,
         )

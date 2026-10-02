@@ -9,6 +9,7 @@ from backend.app.models.repayment import Repayment
 from backend.app.models.repayment_schedule import RepaymentSchedule
 
 from backend.app.services.repayment_service import repayment_service
+from backend.app.services.audit_log_service import audit_log_service
 
 class CollectionService:
 
@@ -239,6 +240,10 @@ class CollectionService:
             .first()
         )
 
+        previous_collection_status = (
+            collection.status if collection is not None else "NOT_CREATED"
+        )
+
         if collection is None:
             days_past_due = self.calculate_days_past_due(
                 due_date=schedule.due_date,
@@ -269,6 +274,26 @@ class CollectionService:
             collection.collection_channel = collection_channel
             collection.remarks = remarks
             collection.collected_at = repayment.paid_at
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=application_id,
+            actor_type="SYSTEM",
+            action="COLLECTION_RECORDED",
+            entity_type="COLLECTION",
+            entity_reference=collection.collection_id,
+            description=(
+                f"Collection recorded with status "
+                f"{collection.status}; "
+                f"collected amount {collection.collected_amount}; "
+                f"outstanding amount {collection.outstanding_amount}; "
+                f"DPD {collection.days_past_due}"
+            ),
+            previous_state=previous_collection_status,
+            new_state=collection.status,
+            request_reference=collection_reference,
+        )
 
         db.commit()
         db.refresh(collection)
