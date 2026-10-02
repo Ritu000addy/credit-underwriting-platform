@@ -178,36 +178,43 @@ def update_disbursement_status(
             detail="Disbursement not found",
         )
 
-    if update.status == "INITIATED":
-        return disbursement_service.initiate_disbursement(
-            db=db,
-            disbursement=disbursement,
+    try:
+        if update.status == "INITIATED":
+            return disbursement_service.initiate_disbursement(
+                db=db,
+                disbursement=disbursement,
+            )
+
+        if update.status == "PROCESSING":
+            return disbursement_service.mark_processing(
+                db=db,
+                disbursement=disbursement,
+            )
+
+        if update.status == "PROCESSED":
+            return disbursement_service.process_disbursement(
+                db=db,
+                disbursement=disbursement,
+                bank_reference=update.bank_reference,
+            )
+
+        if update.status == "FAILED":
+            return disbursement_service.fail_disbursement(
+                db=db,
+                disbursement=disbursement,
+                failure_reason=update.failure_reason or "Disbursement failed",
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid disbursement status",
         )
 
-    if update.status == "PROCESSING":
-        return disbursement_service.mark_processing(
-            db=db,
-            disbursement=disbursement,
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
         )
-
-    if update.status == "PROCESSED":
-        return disbursement_service.process_disbursement(
-            db=db,
-            disbursement=disbursement,
-            bank_reference=update.bank_reference,
-        )
-
-    if update.status == "FAILED":
-        return disbursement_service.fail_disbursement(
-            db=db,
-            disbursement=disbursement,
-            failure_reason=update.failure_reason or "Disbursement failed",
-        )
-
-    raise HTTPException(
-        status_code=400,
-        detail="Invalid disbursement status",
-    )
 
 # Bank Disbursement Webhook
 @router.post("/webhooks/bank")

@@ -76,7 +76,7 @@ class AadhaarKYCService:
         )
 
         payload = {
-            "aadhar_number": aadhaar_number,
+            "aadhaar_number": aadhaar_number,
             "user_consent": user_consent,
             #"user_id": user_id,
             #"workflow_session_token": workflow_session_token,

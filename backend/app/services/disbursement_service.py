@@ -137,6 +137,9 @@ class DisbursementService:
 
         previous_status = disbursement.status
 
+        if disbursement.status != "INITIATED":
+            raise ValueError("DISBURSEMENT_NOT_INITIATED")
+
         disbursement.status = "PROCESSING"
 
         audit_log_service.log(
@@ -166,6 +169,9 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
+        
+        if disbursement.status != "PROCESSING":
+            raise ValueError("DISBURSEMENT_NOT_PROCESSING")
 
         disbursement.status = "PROCESSED"
         disbursement.bank_reference = bank_reference
@@ -199,6 +205,13 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
+
+        if disbursement.status not in {
+            "CREATED",
+            "INITIATED",
+            "PROCESSING",
+        }:
+            raise ValueError("DISBURSEMENT_NOT_ELIGIBLE_FOR_FAILURE")
 
         disbursement.status = "FAILED"
         disbursement.failure_reason = failure_reason
