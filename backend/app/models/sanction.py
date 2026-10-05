@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,29 @@ from backend.app.models.base import Base
 
 class Sanction(Base):
     __tablename__ = "sanctions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "application_id",
+            name="uq_sanctions_application",
+        ),
+        CheckConstraint(
+            "sanctioned_amount > 0",
+            name="ck_sanctions_amount_positive",
+        ),
+        CheckConstraint(
+            "sanctioned_tenure > 0",
+            name="ck_sanctions_tenure_positive",
+        ),
+        CheckConstraint(
+            "sanctioned_emi IS NULL OR sanctioned_emi >= 0",
+            name="ck_sanctions_emi_non_negative",
+        ),
+        CheckConstraint(
+            "interest_rate IS NULL OR interest_rate >= 0",
+            name="ck_sanctions_interest_rate_non_negative",
+        ),
+    )
 
     sanction_id: Mapped[str] = mapped_column(
         String(50),

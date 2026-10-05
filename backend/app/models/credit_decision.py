@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,81 @@ from backend.app.models.base import Base
 
 class CreditDecision(Base):
     __tablename__ = "credit_decisions"
+
+    __table_args__ = (
+        Index(
+            "ix_credit_decisions_application_created",
+            "application_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "decision IN ('APPROVE', 'REFER', 'REJECT')",
+            name="ck_credit_decisions_decision",
+        ),
+        CheckConstraint(
+            "risk_grade IS NULL OR risk_grade IN ('A', 'B', 'C', 'D', 'E')",
+            name="ck_credit_decisions_risk_grade",
+        ),
+        CheckConstraint(
+            "probability_of_default IS NULL OR "
+            "(probability_of_default >= 0 AND probability_of_default <= 1)",
+            name="ck_credit_decisions_pd_range",
+        ),
+        CheckConstraint(
+            "confidence IS NULL OR "
+            "(confidence >= 0 AND confidence <= 1)",
+            name="ck_credit_decisions_confidence_range",
+        ),
+        CheckConstraint(
+            "foir IS NULL OR foir >= 0",
+            name="ck_credit_decisions_foir_non_negative",
+        ),
+        CheckConstraint(
+            "foir IS NULL OR foir <= 100",
+            name="ck_credit_decisions_foir_max_100",
+        ),
+        CheckConstraint(
+            "recommended_amount IS NULL OR recommended_amount >= 0",
+            name="ck_credit_decisions_recommended_amount_non_negative",
+        ),
+        CheckConstraint(
+            "recommended_emi IS NULL OR recommended_emi >= 0",
+            name="ck_credit_decisions_recommended_emi_non_negative",
+        ),
+        CheckConstraint(
+            "recommended_tenure IS NULL OR recommended_tenure >= 0",
+            name="ck_credit_decisions_recommended_tenure_non_negative",
+        ),
+        CheckConstraint(
+            "credit_score IS NULL OR credit_score >= 0",
+            name="ck_credit_decisions_credit_score_non_negative",
+        ),
+        CheckConstraint(
+            "affordability_score IS NULL OR "
+            "(affordability_score >= 0 AND affordability_score <= 100)",
+            name="ck_credit_decisions_affordability_score_range",
+        ),
+        CheckConstraint(
+            "repayment_propensity IS NULL OR "
+            "(repayment_propensity >= 0 AND repayment_propensity <= 100)",
+            name="ck_credit_decisions_repayment_propensity_range",
+        ),
+        CheckConstraint(
+            "fraud_score IS NULL OR "
+            "(fraud_score >= 0 AND fraud_score <= 100)",
+            name="ck_credit_decisions_fraud_score_range",
+        ),
+        CheckConstraint(
+            "income_stability_score IS NULL OR "
+            "(income_stability_score >= 0 AND income_stability_score <= 100)",
+            name="ck_credit_decisions_income_stability_score_range",
+        ),
+        CheckConstraint(
+            "risk_segment IS NULL OR "
+            "risk_segment IN ('LOW_RISK', 'MEDIUM_RISK', 'HIGH_RISK')",
+            name="ck_credit_decisions_risk_segment",
+        ),
+    )
 
     decision_id: Mapped[str] = mapped_column(
         String(50),
@@ -103,8 +178,16 @@ class CreditDecision(Base):
 
     policy_version: Mapped[str | None] = mapped_column(
         String(100),
-        nullable=True,
+        nullable=False,
     )
+
+    effective_from: Mapped[str] = mapped_column(
+        String(20), 
+        nullable=False)
+
+    effective_to: Mapped[str | None] = mapped_column(
+        String(20), 
+        nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

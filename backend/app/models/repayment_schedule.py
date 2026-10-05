@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, CheckConstraint, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,56 @@ from backend.app.models.base import Base
 
 class RepaymentSchedule(Base):
     __tablename__ = "repayment_schedules"
+
+    __table_args__ = (
+        Index(
+            "ix_repayment_schedules_application_installment",
+            "application_id",
+            "installment_number",
+        ),
+        Index(
+            "ix_repayment_schedules_disbursement_installment",
+            "disbursement_id",
+            "installment_number",
+        ),
+        UniqueConstraint(
+            "disbursement_id",
+            "installment_number",
+            name="uq_repayment_schedules_disbursement_installment",
+        ),
+        CheckConstraint(
+            "installment_number >= 1",
+            name="ck_repayment_schedules_installment_number_positive",
+        ),
+        CheckConstraint(
+            "principal_due >= 0",
+            name="ck_repayment_schedules_principal_due_non_negative",
+        ),
+        CheckConstraint(
+            "interest_due >= 0",
+            name="ck_repayment_schedules_interest_due_non_negative",
+        ),
+        CheckConstraint(
+            "total_due >= 0",
+            name="ck_repayment_schedules_total_due_non_negative",
+        ),
+        CheckConstraint(
+            "outstanding_principal >= 0",
+            name="ck_repayment_schedules_outstanding_principal_non_negative",
+        ),
+        CheckConstraint(
+            "total_due = principal_due + interest_due",
+            name="ck_repayment_schedules_total_due_consistency",
+        ),
+        CheckConstraint(
+            "status IN ('PENDING', 'PAID')",
+            name="ck_repayment_schedules_status",
+        ),
+        CheckConstraint(
+            "status <> 'PAID' OR paid_at IS NOT NULL",
+            name="ck_repayment_schedules_paid_at_required",
+        ),
+    )
 
     repayment_schedule_id: Mapped[str] = mapped_column(
         String(50),

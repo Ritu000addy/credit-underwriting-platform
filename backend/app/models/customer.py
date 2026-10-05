@@ -1,12 +1,19 @@
 from datetime import datetime, date
 
-from sqlalchemy import DateTime, String, Date
+from sqlalchemy import DateTime, String, Date, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
 
 class Customer(Base):
     __tablename__ = "customers"
+
+    __table_args__ = (
+        Index(
+            "ix_customers_pan",
+            "pan",
+        ),
+    )
 
     customer_id: Mapped[str] = mapped_column(
         String(50),

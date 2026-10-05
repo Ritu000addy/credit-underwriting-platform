@@ -13,6 +13,9 @@ class BeneficiaryValidationService:
         beneficiary: BeneficiaryAccount,
     ) -> BeneficiaryAccount:
 
+        if beneficiary.validation_status != "PENDING":
+            raise ValueError("BENEFICIARY_NOT_ELIGIBLE_FOR_VALIDATION")
+
         if not beneficiary.account_holder_name:
             beneficiary.validation_status = "FAILED"
             beneficiary.failure_reason = "ACCOUNT_HOLDER_NAME_MISSING"

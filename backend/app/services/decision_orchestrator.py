@@ -70,7 +70,10 @@ class DecisionOrchestrator:
             policy_checks=policy_result.rules,
 
             model_version=risk_result.model_version,
-            policy_version="TBD",
+            model_features=risk_result.model_features,
+            policy_version=policy_result.policy_version,
+            effective_from=policy_result.effective_from,
+            effective_to=policy_result.effective_to,
         )
 
 decision_orchestrator = DecisionOrchestrator()

@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,31 @@ from backend.app.models.base import Base
 
 class Repayment(Base):
     __tablename__ = "repayments"
+
+    __table_args__ = (
+        Index(
+            "ix_repayments_application_created",
+            "application_id",
+            "created_at",
+        ),
+        Index(
+            "ix_repayments_schedule_created",
+            "repayment_schedule_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "repayment_amount > 0",
+            name="ck_repayments_amount_positive",
+        ),
+        CheckConstraint(
+            "principal_allocated IS NULL OR principal_allocated >= 0",
+            name="ck_repayments_principal_allocated_non_negative",
+        ),
+        CheckConstraint(
+            "interest_allocated IS NULL OR interest_allocated >= 0",
+            name="ck_repayments_interest_allocated_non_negative",
+        ),
+    )
 
     repayment_id: Mapped[str] = mapped_column(
         String(50),

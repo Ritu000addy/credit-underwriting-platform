@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Index, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,28 @@ from backend.app.models.base import Base
 
 class InternalLedger(Base):
     __tablename__ = "internal_ledger"
+
+    __table_args__ = (
+        Index(
+            "ix_internal_ledger_application_date",
+            "application_id",
+            "transaction_date",
+        ),
+        Index(
+            "ix_internal_ledger_disbursement_date",
+            "disbursement_id",
+            "transaction_date",
+        ),
+        UniqueConstraint(
+            "disbursement_id",
+            "transaction_type",
+            name="uq_internal_ledger_disbursement_transaction_type",
+        ),
+        CheckConstraint(
+            "transaction_amount >= 0",
+            name="ck_internal_ledger_transaction_amount_non_negative",
+        ),
+    )
 
     ledger_id: Mapped[str] = mapped_column(
         String(50),

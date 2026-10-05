@@ -3,6 +3,7 @@ from backend.app.schemas.policy_validation import (
     PolicyValidationResponse,
 )
 
+from backend.app.services.policy_config import POLICY_METADATA
 
 class PolicyValidationService:
 
@@ -153,7 +154,7 @@ class PolicyValidationService:
             policy_checks=policy_checks,
             policy_failures=policy_failures,
             manual_review_flags=manual_review_flags,
-            policy_version="POL-2026.09",
+            policy_version=POLICY_METADATA["policy_version"],
         )
 
 

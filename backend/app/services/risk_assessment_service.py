@@ -62,6 +62,9 @@ class RiskAssessmentService:
             features
         )
 
+        credit_risk_output = credit_risk_result["model_output"]
+        model_features = credit_risk_result["model_features"]
+
         fraud_risk_result = fraud_risk_service.assess(
             borrower
         )

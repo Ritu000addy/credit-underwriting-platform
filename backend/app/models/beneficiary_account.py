@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +8,17 @@ from backend.app.models.base import Base
 
 class BeneficiaryAccount(Base):
     __tablename__ = "beneficiary_accounts"
+
+    __table_args__ = (
+        Index(
+            "ix_beneficiary_accounts_application",
+            "application_id",
+        ),
+        CheckConstraint(
+            "validation_status IN ('PENDING', 'VALIDATED', 'FAILED')",
+            name="ck_beneficiary_accounts_validation_status",
+        ),
+    )
 
     beneficiary_id: Mapped[str] = mapped_column(
         String(50),

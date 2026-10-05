@@ -49,6 +49,8 @@ class CreditDecisionService:
             # Model Governance
             model_version=decision.model_version,
             policy_version=decision.policy_version,
+            effective_from=decision.effective_from,
+            effective_to=decision.effective_to,
         )
 
         db.add(credit_decision)

@@ -31,8 +31,7 @@ class InternalLedgerService:
         )
 
         db.add(ledger_entry)
-        db.commit()
-        db.refresh(ledger_entry)
+        db.flush()
 
         return ledger_entry
 

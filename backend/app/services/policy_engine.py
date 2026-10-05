@@ -4,7 +4,7 @@ from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.policy import (PolicyEvaluationResult, PolicyRuleResult)
 
-from backend.app.services.policy_config import POLICY_CONFIG
+from backend.app.services.policy_config import POLICY_CONFIG, POLICY_METADATA
 
 class PolicyEngine:
 
@@ -535,6 +535,9 @@ class PolicyEngine:
         return PolicyEvaluationResult(
             policy_status=policy_status,
             rules=rules,
+            policy_version=POLICY_METADATA["policy_version"],
+            effective_from=POLICY_METADATA["effective_from"],
+            effective_to=POLICY_METADATA["effective_to"],
         )
 
 policy_engine= PolicyEngine()

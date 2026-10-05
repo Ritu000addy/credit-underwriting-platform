@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, Any
 
 from pydantic import BaseModel, Field
 
@@ -49,4 +49,7 @@ class CreditDecisionOutput(BaseModel):
     
     # Model Governance
     model_version: str | None = None
+    model_features: dict[str, Any] | None = None
     policy_version: str | None = None
+    effective_from: str
+    effective_to: str | None = None

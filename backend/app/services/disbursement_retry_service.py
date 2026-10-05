@@ -6,6 +6,7 @@ from backend.app.models.disbursement import Disbursement
 from backend.app.models.internal_ledger import InternalLedger
 from backend.app.services.bank_routing_service import bank_routing_service
 from backend.app.services.internal_ledger_service import internal_ledger_service
+from backend.app.services.audit_log_service import audit_log_service
 
 
 class DisbursementRetryService:
@@ -104,6 +105,20 @@ class DisbursementRetryService:
             disbursement.status = "FAILED"
             disbursement.failure_reason = routing_result.failure_reason
 
+            audit_log_service.log(
+                db=db,
+                audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+                application_id=disbursement.application_id,
+                actor_type="SYSTEM",
+                action="DISBURSEMENT_RETRY_FAILED",
+                entity_type="DISBURSEMENT",
+                entity_reference=disbursement.disbursement_id,
+                description="Disbursement retry failed during bank routing",
+                previous_state="FAILED",
+                new_state="FAILED",
+                request_reference=disbursement.disbursement_id,
+            )
+
             db.commit()
             db.refresh(disbursement)
 
@@ -119,6 +134,20 @@ class DisbursementRetryService:
         disbursement.status = "INITIATED"
         disbursement.bank_reference = routing_result.routing_reference
         disbursement.failure_reason = None
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=disbursement.application_id,
+            actor_type="SYSTEM",
+            action="DISBURSEMENT_RETRIED",
+            entity_type="DISBURSEMENT",
+            entity_reference=disbursement.disbursement_id,
+            description="Disbursement retried successfully and re-initiated",
+            previous_state="FAILED",
+            new_state="INITIATED",
+            request_reference=disbursement.disbursement_id,
+        )
 
         db.commit()
         db.refresh(disbursement)

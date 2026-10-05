@@ -1,3 +1,10 @@
+POLICY_METADATA = {
+    "policy_version": "POL-2026.09",
+    "effective_from": "2026-09-01",
+    "effective_to": None,
+    "status": "ACTIVE",
+}
+
 POLICY_CONFIG = {
     "age": {
         "min_age": 21,

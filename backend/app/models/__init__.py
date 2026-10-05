@@ -22,3 +22,4 @@ from backend.app.models.beneficiary_account import BeneficiaryAccount
 from backend.app.models.operations_queue import OperationsQueue
 from backend.app.models.internal_ledger import InternalLedger
 from backend.app.models.manual_review import ManualReview
+from backend.app.models.collection import Collection

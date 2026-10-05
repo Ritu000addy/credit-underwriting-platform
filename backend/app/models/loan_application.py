@@ -1,13 +1,25 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
 
 class LoanApplication(Base):
     __tablename__ = "loan_applications"
+
+    __table_args__ = (
+        Index(
+            "ix_loan_applications_customer_created",
+            "customer_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "requested_amount >= 0",
+            name="ck_loan_applications_requested_amount_non_negative",
+        ),
+    )
 
     application_id: Mapped[str] = mapped_column(
         String(50),
@@ -20,7 +32,7 @@ class LoanApplication(Base):
         nullable = False,
     )
 
-    product: Mapped[str | None] = mapped_column(
+    product: Mapped[str] = mapped_column(
         String(50),
         nullable = False,
     )

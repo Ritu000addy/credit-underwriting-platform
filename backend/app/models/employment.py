@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,26 @@ from backend.app.models.base import Base
 
 class Employment(Base):
     __tablename__ = "employment"
+
+    __table_args__ = (
+        Index(
+            "ix_employment_application_analyzed",
+            "application_id",
+            "analyzed_at",
+        ),
+        CheckConstraint(
+            "monthly_income IS NULL OR monthly_income >= 0",
+            name="ck_employment_monthly_income_non_negative",
+        ),
+        CheckConstraint(
+            "employment_vintage_months IS NULL OR employment_vintage_months >= 0",
+            name="ck_employment_vintage_months_non_negative",
+        ),
+        CheckConstraint(
+            "business_vintage_months IS NULL OR business_vintage_months >= 0",
+            name="ck_employment_business_vintage_months_non_negative",
+        ),
+    )
 
     employment_id: Mapped[str] = mapped_column(
         String(50),

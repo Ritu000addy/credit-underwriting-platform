@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,18 @@ from backend.app.models.base import Base
 
 class Reconciliation(Base):
     __tablename__ = "reconciliation"
+
+    __table_args__ = (
+        Index(
+            "ix_reconciliation_disbursement_created",
+            "disbursement_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "transaction_amount >= 0",
+            name="ck_reconciliation_transaction_amount_non_negative",
+        ),
+    )
 
     reconciliation_id: Mapped[str] = mapped_column(
         String(50),

@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, CheckConstraint, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,47 @@ from backend.app.models.base import Base
 
 class Collection(Base):
     __tablename__ = "collections"
+
+    __table_args__ = (
+        Index(
+            "ix_collections_application_created",
+            "application_id",
+            "created_at",
+        ),
+        Index(
+            "ix_collections_schedule_created",
+            "repayment_schedule_id",
+            "created_at",
+        ),
+        UniqueConstraint(
+            "collection_reference",
+            name="uq_collections_collection_reference",
+        ),
+        CheckConstraint(
+            "due_amount >= 0",
+            name="ck_collections_due_amount_non_negative",
+        ),
+        CheckConstraint(
+            "collected_amount >= 0",
+            name="ck_collections_collected_amount_non_negative",
+        ),
+        CheckConstraint(
+            "outstanding_amount >= 0",
+            name="ck_collections_outstanding_amount_non_negative",
+        ),
+        CheckConstraint(
+            "days_past_due >= 0",
+            name="ck_collections_days_past_due_non_negative",
+        ),
+        CheckConstraint(
+            "collected_amount <= due_amount",
+            name="ck_collections_collected_amount_not_over_due",
+        ),
+        CheckConstraint(
+            "outstanding_amount <= due_amount",
+            name="ck_collections_outstanding_amount_not_over_due",
+        ),
+    )
 
     collection_id: Mapped[str] = mapped_column(
         String(50),

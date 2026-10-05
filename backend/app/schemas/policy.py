@@ -12,3 +12,6 @@ class PolicyRuleResult(BaseModel):
 class PolicyEvaluationResult(BaseModel):
     policy_status: Literal["APPROVE", "REFER", "REJECT"]
     rules: list[PolicyRuleResult]
+    policy_version: str
+    effective_from: str
+    effective_to: str | None = None

@@ -58,6 +58,10 @@ from backend.app.api.routes.genai_underwriting import (
 
 from backend.app.api.routes.manual_review import router as manual_review_router
 
+from backend.app.api.routes.review_exception import (
+    router as review_exception_router,
+)
+
 
 # ============================================================
 # 7. SANCTION
@@ -156,6 +160,7 @@ app.include_router(genai_underwriting_router)
 
 # 6. Manual Review
 app.include_router(manual_review_router)
+app.include_router(review_exception_router)
 
 # 7. Sanction
 app.include_router(sanctions_router)

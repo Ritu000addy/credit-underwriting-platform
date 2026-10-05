@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +8,14 @@ from backend.app.models.base import Base
 
 class Document(Base):
     __tablename__ = "documents"
+
+    __table_args__ = (
+        Index(
+            "ix_documents_application_created",
+            "application_id",
+            "created_at",
+        ),
+    )
 
     document_id: Mapped[str] = mapped_column(
         String(50),

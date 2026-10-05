@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, CheckConstraint, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +8,26 @@ from backend.app.models.base import Base
 
 class Agreement(Base):
     __tablename__ = "agreements"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "sanction_id",
+            name="uq_agreements_sanction",
+        ),
+        Index(
+            "ix_agreements_application_created",
+            "application_id",
+            "created_at",
+        ),
+        CheckConstraint(
+            "agreement_status IN ('CREATED', 'ACTIVE', 'COMPLETED', 'CANCELLED')",
+            name="ck_agreements_status",
+        ),
+        CheckConstraint(
+            "esign_status IN ('NOT_STARTED', 'INITIATED', 'SIGNED', 'FAILED')",
+            name="ck_agreements_esign_status",
+        ),
+    )
 
     agreement_id: Mapped[str] = mapped_column(
         String(50),

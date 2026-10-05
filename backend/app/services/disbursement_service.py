@@ -30,6 +30,18 @@ class DisbursementService:
         processed_at=None,
     ) -> Disbursement:
 
+        if idempotency_key:
+            existing_disbursement = (
+                db.query(Disbursement)
+                .filter(
+                    Disbursement.idempotency_key == idempotency_key
+                )
+                .first()
+            )
+
+            if existing_disbursement is not None:
+                raise ValueError("DISBURSEMENT_ALREADY_EXISTS")
+
         disbursement = Disbursement(
             disbursement_id=disbursement_id,
             application_id=application_id,
@@ -57,6 +69,9 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
+
+        if disbursement.status != "CREATED":
+            raise ValueError("DISBURSEMENT_NOT_ELIGIBLE_FOR_INITIATION")
 
         routing_result = bank_routing_service.route_disbursement(
             payment_provider=disbursement.payment_provider,
@@ -103,9 +118,6 @@ class DisbursementService:
             request_reference=disbursement.disbursement_id,
         )
 
-        db.commit()
-        db.refresh(disbursement)
-
         existing_ledger_entry = (
             db.query(InternalLedger)
             .filter(
@@ -125,6 +137,7 @@ class DisbursementService:
                 internal_reference=f"LEDGER-{disbursement.disbursement_id}",
             )
 
+        db.commit()
         db.refresh(disbursement)
 
         return disbursement
@@ -169,9 +182,12 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
-        
-        if disbursement.status != "PROCESSING":
-            raise ValueError("DISBURSEMENT_NOT_PROCESSING")
+
+        if disbursement.status not in {
+            "INITIATED",
+            "PROCESSING",
+        }:
+            raise ValueError("DISBURSEMENT_NOT_ELIGIBLE_FOR_PROCESSING")
 
         disbursement.status = "PROCESSED"
         disbursement.bank_reference = bank_reference

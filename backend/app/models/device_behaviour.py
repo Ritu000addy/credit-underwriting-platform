@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Index, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,47 @@ from backend.app.models.base import Base
 
 class DeviceBehaviour(Base):
     __tablename__ = "device_behaviour"
+
+    __table_args__ = (
+        Index(
+            "ix_device_behaviour_application_analyzed",
+            "application_id",
+            "analyzed_at",
+        ),
+        CheckConstraint(
+            "device_age_days IS NULL OR device_age_days >= 0",
+            name="ck_device_behaviour_device_age_days_non_negative",
+        ),
+        CheckConstraint(
+            "login_count IS NULL OR login_count >= 0",
+            name="ck_device_behaviour_login_count_non_negative",
+        ),
+        CheckConstraint(
+            "session_count IS NULL OR session_count >= 0",
+            name="ck_device_behaviour_session_count_non_negative",
+        ),
+        CheckConstraint(
+            "failed_login_count IS NULL OR failed_login_count >= 0",
+            name="ck_device_behaviour_failed_login_count_non_negative",
+        ),
+        CheckConstraint(
+            "application_velocity IS NULL OR application_velocity >= 0",
+            name="ck_device_behaviour_application_velocity_non_negative",
+        ),
+        CheckConstraint(
+            "device_velocity IS NULL OR device_velocity >= 0",
+            name="ck_device_behaviour_device_velocity_non_negative",
+        ),
+        CheckConstraint(
+            "ip_velocity IS NULL OR ip_velocity >= 0",
+            name="ck_device_behaviour_ip_velocity_non_negative",
+        ),
+        CheckConstraint(
+            "behavioural_risk_score IS NULL OR "
+            "(behavioural_risk_score >= 0 AND behavioural_risk_score <= 100)",
+            name="ck_device_behaviour_risk_score_range",
+        ),
+    )
 
     device_behaviour_id: Mapped[str] = mapped_column(
         String(50),

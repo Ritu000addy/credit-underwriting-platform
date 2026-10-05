@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, String, Text
+from sqlalchemy import DateTime, Numeric, String, Text, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,13 @@ from backend.app.models.base import Base
 
 class ModelRegistry(Base):
     __tablename__ = "model_registry"
+
+    __table_args__ = (
+        CheckConstraint(
+            "roc_auc IS NULL OR (roc_auc >= 0 AND roc_auc <= 1)",
+            name="ck_model_registry_roc_auc_range",
+        ),
+    )
 
     model_registry_id: Mapped[str] = mapped_column(
         String(50),

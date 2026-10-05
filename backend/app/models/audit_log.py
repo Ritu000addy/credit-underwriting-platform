@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, String, Text, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +8,14 @@ from backend.app.models.base import Base
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+
+    __table_args__ = (
+        Index(
+            "ix_audit_logs_application_created",
+            "application_id",
+            "created_at",
+        ),
+    )
 
     audit_log_id: Mapped[str] = mapped_column(
         String(50),

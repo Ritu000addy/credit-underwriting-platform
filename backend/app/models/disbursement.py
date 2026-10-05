@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, CheckConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -9,6 +9,31 @@ from backend.app.models.base import Base
 
 class Disbursement(Base):
     __tablename__ = "disbursements"
+
+    __table_args__ = (
+        Index(
+            "ix_disbursements_application_created",
+            "application_id",
+            "created_at",
+        ),
+        Index(
+            "ix_disbursements_status_created",
+            "status",
+            "created_at",
+        ),
+        CheckConstraint(
+            "disbursement_amount > 0",
+            name="ck_disbursements_amount_positive",
+        ),
+        CheckConstraint(
+            "retry_attempts >= 0",
+            name="ck_disbursements_retry_attempts_non_negative",
+        ),
+        CheckConstraint(
+            "status IN ('CREATED', 'INITIATED', 'PROCESSING', 'PROCESSED', 'FAILED')",
+            name="ck_disbursements_status",
+        ),
+    )
 
     disbursement_id: Mapped[str] = mapped_column(
         String(50),

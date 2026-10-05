@@ -78,10 +78,16 @@ def validate_beneficiary(
             detail="Beneficiary not found",
         )
 
-    result = beneficiary_validation_service.validate_beneficiary(
-        db=db,
-        beneficiary=beneficiary,
-    )
+    try:
+        result = beneficiary_validation_service.validate_beneficiary(
+            db=db,
+            beneficiary=beneficiary,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
     return {
         "beneficiary_id": result.beneficiary_id,
@@ -133,6 +139,7 @@ def create_disbursement(
         application_id=disbursement.application_id,
         sanction_id=disbursement.sanction_id,
         disbursement_amount=disbursement.disbursement_amount,
+        beneficiary_reference=disbursement.beneficiary_reference,
     )
 
     if not eligibility.eligible:
@@ -146,19 +153,26 @@ def create_disbursement(
         
     disbursement_id = f"DISB-{uuid.uuid4().hex[:12].upper()}"
 
-    result = disbursement_service.create_disbursement(
-        db=db,
-        disbursement_id=disbursement_id,
-        application_id=disbursement.application_id,
-        disbursement_amount=disbursement.disbursement_amount,
-        status="CREATED",
-        idempotency_key=disbursement.idempotency_key,
-        sanction_id=disbursement.sanction_id,
-        beneficiary_reference=disbursement.beneficiary_reference,
-        payment_provider=disbursement.payment_provider,
-    )
+    try:
+        result = disbursement_service.create_disbursement(
+            db=db,
+            disbursement_id=disbursement_id,
+            application_id=disbursement.application_id,
+            disbursement_amount=disbursement.disbursement_amount,
+            status="CREATED",
+            idempotency_key=disbursement.idempotency_key,
+            sanction_id=disbursement.sanction_id,
+            beneficiary_reference=disbursement.beneficiary_reference,
+            payment_provider=disbursement.payment_provider,
+        )
 
-    return result
+        return result
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
 
 # Update Disbursement
 @router.post(
@@ -233,6 +247,18 @@ def bank_disbursement_webhook(
             detail="Disbursement not found",
         )
 
+    if disbursement.bank_reference != webhook.bank_reference:
+        raise HTTPException(
+            status_code=400,
+            detail="Bank reference mismatch",
+        )
+
+    if webhook.status not in {"SUCCESS", "FAILED"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid bank webhook status",
+        )
+
     audit_log_service.log(
         db=db,
         audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
@@ -250,23 +276,23 @@ def bank_disbursement_webhook(
         request_reference=webhook.disbursement_id,
     )
 
-    if disbursement.bank_reference != webhook.bank_reference:
-        raise HTTPException(
-            status_code=400,
-            detail="Bank reference mismatch",
-        )
-
     if webhook.status == "SUCCESS":
         duplicate_webhook = disbursement.status == "PROCESSED"
 
         if duplicate_webhook:
             result = disbursement
         else:
-            result = disbursement_service.process_disbursement(
-                db=db,
-                disbursement=disbursement,
-                bank_reference=webhook.bank_reference,
-            )
+            try:
+                result = disbursement_service.process_disbursement(
+                    db=db,
+                    disbursement=disbursement,
+                    bank_reference=webhook.bank_reference,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail=str(exc),
+                )
 
         reconciliation_result = reconciliation_service.reconcile_disbursement(
             db=db,
@@ -293,12 +319,27 @@ def bank_disbursement_webhook(
             },
         }
 
+    if disbursement.status == "FAILED":
+        return {
+            "disbursement_id": disbursement.disbursement_id,
+            "status": "FAILED",
+            "bank_reference": disbursement.bank_reference,
+            "failure_reason": disbursement.failure_reason,
+            "duplicate_webhook": True,
+    }
+
     if webhook.status == "FAILED":
-        result = disbursement_service.fail_disbursement(
-            db=db,
-            disbursement=disbursement,
-            failure_reason=webhook.failure_reason or "Bank disbursement failed",
-        )
+        try:
+            result = disbursement_service.fail_disbursement(
+                db=db,
+                disbursement=disbursement,
+                failure_reason=webhook.failure_reason or "Bank disbursement failed",
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail=str(exc),
+            )
 
         return {
             "message": "Disbursement failed",

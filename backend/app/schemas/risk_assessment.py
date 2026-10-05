@@ -1,5 +1,6 @@
 from decimal import Decimal
 from pydantic import BaseModel, Field
+from typing import Any
 
 class RiskAssessmentResult(BaseModel):
     status: str
@@ -42,3 +43,4 @@ class RiskAssessmentResult(BaseModel):
     
     # Model Governance
     model_version: str | None = None
+    model_features: dict[str, Any] | None = None

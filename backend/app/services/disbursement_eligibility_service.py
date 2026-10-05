@@ -16,6 +16,7 @@ class DisbursementEligibilityService:
         application_id: str,
         sanction_id: str,
         disbursement_amount: Decimal,
+        beneficiary_reference: str | None,
     ) -> dict:
 
         reasons: list[str] = []
@@ -71,17 +72,21 @@ class DisbursementEligibilityService:
 
         # 4. Validate beneficiary account
 
-        validated_beneficiary = (
-            db.query(BeneficiaryAccount)
-            .filter(
-                BeneficiaryAccount.application_id == application_id,
-                BeneficiaryAccount.validation_status == "VALIDATED",
+        if not beneficiary_reference:
+            reasons.append("BENEFICIARY_REFERENCE_REQUIRED")
+        else:
+            validated_beneficiary = (
+                db.query(BeneficiaryAccount)
+                .filter(
+                    BeneficiaryAccount.beneficiary_id == beneficiary_reference,
+                    BeneficiaryAccount.application_id == application_id,
+                    BeneficiaryAccount.validation_status == "VALIDATED",
+                )
+                .first()
             )
-            .first()
-        )
 
-        if validated_beneficiary is None:
-            reasons.append("BENEFICIARY_NOT_VALIDATED")
+            if validated_beneficiary is None:
+                reasons.append("BENEFICIARY_NOT_VALIDATED")
 
         eligible = len(reasons) == 0
 

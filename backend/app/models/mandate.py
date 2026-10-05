@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, CheckConstraint, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -8,6 +8,22 @@ from backend.app.models.base import Base
 
 class Mandate(Base):
     __tablename__ = "mandates"
+
+    __table_args__ = (
+    UniqueConstraint(
+        "application_id",
+        name="uq_mandates_application",
+    ),
+    Index(
+        "ix_mandates_status_created",
+        "status",
+        "created_at",
+    ),
+    CheckConstraint(
+        "status IN ('INITIATED', 'COMPLETED', 'FAILED')",
+        name="ck_mandates_status",
+    ),
+)
 
     mandate_id: Mapped[str] = mapped_column(
         String(50),

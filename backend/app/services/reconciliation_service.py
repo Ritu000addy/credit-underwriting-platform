@@ -104,6 +104,16 @@ class ReconciliationService:
                 mismatch_reason="DISBURSEMENT_NOT_FOUND",
             )
 
+        if disbursement.status != "PROCESSED":
+            return ReconciliationMatchResult(
+                status="MISMATCH",
+                disbursement_id=disbursement_id,
+                bank_reference=bank_reference,
+                bank_amount=bank_amount,
+                expected_amount=None,
+                mismatch_reason="DISBURSEMENT_NOT_PROCESSED",
+            )
+
         ledger_entry = (
         db.query(InternalLedger)
         .filter(
@@ -124,6 +134,26 @@ class ReconciliationService:
             )
 
         expected_amount = ledger_entry.transaction_amount
+
+        closed_reconciliation = (
+            db.query(Reconciliation)
+            .filter(
+                Reconciliation.disbursement_id == disbursement_id,
+                Reconciliation.transaction_type == "DISBURSEMENT",
+                Reconciliation.reconciliation_status == "CLOSED",
+            )
+            .first()
+        )
+
+        if closed_reconciliation is not None:
+            return ReconciliationMatchResult(
+                status="CLOSED",
+                disbursement_id=disbursement_id,
+                bank_reference=closed_reconciliation.external_reference,
+                bank_amount=closed_reconciliation.transaction_amount,
+                expected_amount=expected_amount,
+                mismatch_reason=None,
+            )
 
         existing_reconciliation = (
             db.query(Reconciliation)
@@ -228,12 +258,31 @@ class ReconciliationService:
         if reconciliation is None:
             raise ValueError("RECONCILIATION_NOT_FOUND")
 
+        previous_status = reconciliation.reconciliation_status
+
+        if reconciliation.reconciliation_status == "CLOSED":
+            raise ValueError("RECONCILIATION_ALREADY_CLOSED")
+
         if reconciliation.reconciliation_status != "MATCHED":
             raise ValueError("RECONCILIATION_NOT_MATCHED")
 
         reconciliation.reconciliation_status = "CLOSED"
         reconciliation.reconciled_at = (
             reconciliation.reconciled_at or datetime.utcnow()
+        )
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=reconciliation.application_id,
+            actor_type="SYSTEM",
+            action="RECONCILIATION_CLOSED",
+            entity_type="RECONCILIATION",
+            entity_reference=reconciliation.reconciliation_id,
+            description="Reconciliation closed successfully",
+            previous_state=previous_status,
+            new_state="CLOSED",
+            request_reference=reconciliation.disbursement_id,
         )
 
         db.commit()
@@ -280,6 +329,8 @@ class ReconciliationService:
         if queue_item is None:
             raise ValueError("OPERATIONS_QUEUE_NOT_FOUND")
 
+        previous_status = queue_item.queue_status
+
         allowed_statuses = {
             "OPEN",
             "IN_PROGRESS",
@@ -289,13 +340,34 @@ class ReconciliationService:
         if queue_status not in allowed_statuses:
             raise ValueError("INVALID_OPERATIONS_QUEUE_STATUS")
 
-        if (
-            queue_item.queue_status == "RESOLVED"
-            and queue_status != "RESOLVED"
-        ):
+        if queue_item.queue_status == "RESOLVED":
             raise ValueError("OPERATIONS_QUEUE_ALREADY_RESOLVED")
 
+        if (
+            queue_item.queue_status == "OPEN"
+            and queue_status == "RESOLVED"
+        ):
+            raise ValueError("OPERATIONS_QUEUE_MUST_BE_IN_PROGRESS")
+
         queue_item.queue_status = queue_status
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=None,
+            actor_type="SYSTEM",
+            action="OPERATIONS_QUEUE_STATUS_CHANGED",
+            entity_type="OPERATIONS_QUEUE",
+            entity_reference=queue_item.queue_id,
+            description=(
+                f"Operations queue status changed from "
+                f"{previous_status} to {queue_status}"
+            ),
+            previous_state=previous_status,
+            new_state=queue_status,
+            request_reference=queue_item.disbursement_id
+            or queue_item.reconciliation_id,
+        )
 
         db.commit()
         db.refresh(queue_item)
