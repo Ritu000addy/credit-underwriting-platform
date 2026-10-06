@@ -1,11 +1,14 @@
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
 from backend.app.models.credit_decision import CreditDecision
 from backend.app.models.loan_application import LoanApplication
+from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.manual_review import (
     ManualReviewCheckerDecision,
     ManualReviewCreate,
@@ -28,10 +31,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ManualReviewResponse,
+    response_model=ApiResponse[ManualReviewResponse],
 )
 def create_manual_review(
     review: ManualReviewCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -55,7 +59,13 @@ def create_manual_review(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ManualReviewResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Manual review created successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -74,10 +84,11 @@ def create_manual_review(
 
 @router.get(
     "/{application_id}",
-    response_model=ManualReviewResponse,
+    response_model=ApiResponse[ManualReviewResponse],
 )
 def get_manual_review(
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = manual_review_service.get_review(
@@ -91,14 +102,22 @@ def get_manual_review(
             detail="Manual review not found.",
         )
 
-    return result
+    response_data = ManualReviewResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Manual review retrieved successfully.",
+    )
 
 
 @router.get(
     "/{application_id}/history",
+    response_model=ApiResponse[Any],
 )
 def get_manual_review_history(
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     review = manual_review_service.get_review(
@@ -112,19 +131,26 @@ def get_manual_review_history(
             detail="Manual review not found.",
         )
 
-    return manual_review_history_service.get_by_review(
+    result = manual_review_history_service.get_by_review(
         db=db,
         review_id=review.review_id,
+    )
+
+    return success_response(
+        request=request,
+        data=result,
+        message="Manual review history retrieved successfully.",
     )
 
 
 @router.post(
     "/{application_id}/start",
-    response_model=ManualReviewResponse,
+    response_model=ApiResponse[ManualReviewResponse],
 )
 def start_manual_review(
     application_id: str,
     start_request: ManualReviewStart,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     review = manual_review_service.get_review(
@@ -177,7 +203,13 @@ def start_manual_review(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ManualReviewResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Manual review started successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -196,11 +228,12 @@ def start_manual_review(
 
 @router.post(
     "/{application_id}/recommendation",
-    response_model=ManualReviewResponse,
+    response_model=ApiResponse[ManualReviewResponse],
 )
 def submit_manual_review_recommendation(
     application_id: str,
     recommendation: ManualReviewRecommendation,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     review = manual_review_service.get_review(
@@ -266,7 +299,13 @@ def submit_manual_review_recommendation(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ManualReviewResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Manual review recommendation submitted successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -285,11 +324,12 @@ def submit_manual_review_recommendation(
 
 @router.post(
     "/{application_id}/checker-decision",
-    response_model=ManualReviewResponse,
+    response_model=ApiResponse[ManualReviewResponse],
 )
 def submit_manual_review_checker_decision(
     application_id: str,
     decision: ManualReviewCheckerDecision,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     review = manual_review_service.get_review(
@@ -410,7 +450,13 @@ def submit_manual_review_checker_decision(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ManualReviewResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Manual review checker decision completed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()

@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
+from pydantic import ConfigDict
 
 
 class DocumentCreate(BaseModel):
@@ -17,3 +19,10 @@ class DocumentCreate(BaseModel):
 
     extracted_data: Optional[str] = None
     analysis_reference: Optional[str] = None
+
+
+class DocumentResponse(DocumentCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    document_id: str
+    created_at: datetime

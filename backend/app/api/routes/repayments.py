@@ -1,5 +1,6 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -10,6 +11,9 @@ from backend.app.schemas.repayment import (
     RepaymentResponse,
     RepaymentSummaryResponse,
 )
+from backend.app.schemas.common import ApiResponse
+from backend.app.core.responses import success_response
+
 from backend.app.services.repayment_schedule_service import (
     repayment_schedule_service,
 )
@@ -22,12 +26,17 @@ router = APIRouter(
 )
 
 
+# ============================================================
+# Generate Repayment Schedule
+# ============================================================
+
 @router.post(
     "/schedule",
-    response_model=list[RepaymentScheduleResponse],
+    response_model=ApiResponse[list[RepaymentScheduleResponse]],
 )
 def generate_repayment_schedule(
     request: RepaymentScheduleGenerateRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -41,7 +50,16 @@ def generate_repayment_schedule(
             first_due_date=request.first_due_date,
         )
 
-        return schedule
+        response_data = [
+            RepaymentScheduleResponse.model_validate(item)
+            for item in schedule
+        ]
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Repayment schedule generated successfully.",
+        )
 
     except Exception as exc:
         db.rollback()
@@ -50,12 +68,18 @@ def generate_repayment_schedule(
             detail=str(exc),
         )
 
+
+# ============================================================
+# Record Repayment
+# ============================================================
+
 @router.post(
     "/record",
-    response_model=RepaymentResponse,
+    response_model=ApiResponse[RepaymentResponse],
 )
 def record_repayment(
     request: RepaymentCreateRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -70,7 +94,15 @@ def record_repayment(
             payment_provider=request.payment_provider,
         )
 
-        return repayment
+        response_data = RepaymentResponse.model_validate(
+            repayment
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Repayment recorded successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -79,23 +111,40 @@ def record_repayment(
             detail=str(exc),
         )
 
+
+# ============================================================
+# Get Repayment Schedule
+# ============================================================
+
 @router.get(
     "/schedule/{application_id}/{disbursement_id}",
-    response_model=list[RepaymentScheduleResponse],
+    response_model=ApiResponse[list[RepaymentScheduleResponse]],
 )
 def get_repayment_schedule_by_disbursement(
     application_id: str,
     disbursement_id: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
-        schedule = repayment_schedule_service.get_schedule_by_disbursement(
-            db=db,
-            application_id=application_id,
-            disbursement_id=disbursement_id,
+        schedule = (
+            repayment_schedule_service.get_schedule_by_disbursement(
+                db=db,
+                application_id=application_id,
+                disbursement_id=disbursement_id,
+            )
         )
 
-        return schedule
+        response_data = [
+            RepaymentScheduleResponse.model_validate(item)
+            for item in schedule
+        ]
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Repayment schedule retrieved successfully.",
+        )
 
     except Exception as exc:
         db.rollback()
@@ -104,13 +153,19 @@ def get_repayment_schedule_by_disbursement(
             detail=str(exc),
         )
 
+
+# ============================================================
+# Get Repayment Summary
+# ============================================================
+
 @router.get(
     "/summary/{application_id}/{disbursement_id}",
-    response_model=RepaymentSummaryResponse,
+    response_model=ApiResponse[RepaymentSummaryResponse],
 )
 def get_repayment_summary(
     application_id: str,
     disbursement_id: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -120,7 +175,15 @@ def get_repayment_summary(
             disbursement_id=disbursement_id,
         )
 
-        return summary
+        response_data = RepaymentSummaryResponse.model_validate(
+            summary
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Repayment summary retrieved successfully.",
+        )
 
     except Exception as exc:
         db.rollback()

@@ -1,7 +1,9 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 
@@ -16,13 +18,19 @@ from backend.app.schemas.disbursement import (
     DisbursementEligibilityResponse,
     BankDisbursementWebhook,
 )
+
 from backend.app.schemas.beneficiary import (
     BeneficiaryCreate,
     BeneficiaryResponse,
 )
 
+from backend.app.schemas.common import ApiResponse
+from backend.app.core.responses import success_response
+
 from backend.app.services.disbursement_service import disbursement_service
-from backend.app.services.disbursement_eligibility_service import disbursement_eligibility_service
+from backend.app.services.disbursement_eligibility_service import (
+    disbursement_eligibility_service,
+)
 from backend.app.services.beneficiary_validation_service import (
     beneficiary_validation_service,
 )
@@ -35,18 +43,24 @@ from backend.app.services.reconciliation_service import (
 )
 from backend.app.services.audit_log_service import audit_log_service
 
+
 router = APIRouter(
     prefix="/disbursements",
     tags=["Disbursement"],
 )
 
+
+# ============================================================
 # Create Beneficiary
+# ============================================================
+
 @router.post(
     "/beneficiaries",
-    response_model=BeneficiaryResponse,
+    response_model=ApiResponse[BeneficiaryResponse],
 )
 def create_beneficiary(
     beneficiary: BeneficiaryCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     beneficiary_id = f"BEN-{uuid.uuid4().hex[:12].upper()}"
@@ -61,17 +75,32 @@ def create_beneficiary(
         bank_name=beneficiary.bank_name,
     )
 
-    return result
+    response_data = BeneficiaryResponse.model_validate(result)
 
-# Validate Beneficiary
-@router.post(
-    "/beneficiaries/{beneficiary_id}/validate"
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Beneficiary created successfully.",
     )
+
+
+# ============================================================
+# Validate Beneficiary
+# ============================================================
+
+@router.post(
+    "/beneficiaries/{beneficiary_id}/validate",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def validate_beneficiary(
     beneficiary_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    beneficiary = db.get(BeneficiaryAccount, beneficiary_id)
+    beneficiary = db.get(
+        BeneficiaryAccount,
+        beneficiary_id,
+    )
 
     if beneficiary is None:
         raise HTTPException(
@@ -90,7 +119,7 @@ def validate_beneficiary(
             detail=str(exc),
         )
 
-    return {
+    response_data = {
         "beneficiary_id": result.beneficiary_id,
         "application_id": result.application_id,
         "validation_status": result.validation_status,
@@ -99,30 +128,56 @@ def validate_beneficiary(
         "validated_at": result.validated_at,
     }
 
-# Check Disbursement Eligibility
-@router.post(
-    "/eligibility",
-    response_model=DisbursementEligibilityResponse,
-)
-def check_disbursement_eligibility(
-    request: DisbursementEligibilityRequest,
-    db: Session = Depends(get_db),
-):
-    return disbursement_eligibility_service.check_eligibility(
-        db=db,
-        application_id=request.application_id,
-        sanction_id=request.sanction_id,
-        disbursement_amount=request.disbursement_amount,
-        beneficiary_reference=request.beneficiary_reference,
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Beneficiary validation completed successfully.",
     )
 
+
+# ============================================================
+# Check Disbursement Eligibility
+# ============================================================
+
+@router.post(
+    "/eligibility",
+    response_model=ApiResponse[DisbursementEligibilityResponse],
+)
+def check_disbursement_eligibility(
+    eligibility_request: DisbursementEligibilityRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    result = disbursement_eligibility_service.check_eligibility(
+        db=db,
+        application_id=eligibility_request.application_id,
+        sanction_id=eligibility_request.sanction_id,
+        disbursement_amount=eligibility_request.disbursement_amount,
+        beneficiary_reference=eligibility_request.beneficiary_reference,
+    )
+
+    response_data = DisbursementEligibilityResponse.model_validate(
+        result
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Disbursement eligibility checked successfully.",
+    )
+
+
+# ============================================================
 # Create Disbursement
+# ============================================================
+
 @router.post(
     "",
-    response_model=DisbursementResponse,
+    response_model=ApiResponse[DisbursementResponse],
 )
 def create_disbursement(
     disbursement: DisbursementCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     existing_disbursement = (
@@ -155,7 +210,15 @@ def create_disbursement(
                 detail="IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
             )
 
-        return existing_disbursement
+        response_data = DisbursementResponse.model_validate(
+            existing_disbursement
+        )
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Existing disbursement returned for idempotent request.",
+        )
 
     eligibility = (
         disbursement_eligibility_service.check_eligibility(
@@ -193,7 +256,13 @@ def create_disbursement(
             payment_provider=disbursement.payment_provider,
         )
 
-        return result
+        response_data = DisbursementResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Disbursement created successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -239,20 +308,35 @@ def create_disbursement(
                 detail="IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
             )
 
-        return existing_disbursement
+        response_data = DisbursementResponse.model_validate(
+            existing_disbursement
+        )
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Existing disbursement returned after idempotency conflict.",
+        )
 
 
+# ============================================================
 # Update Disbursement
+# ============================================================
+
 @router.post(
     "/{disbursement_id}/status",
-    response_model=DisbursementResponse,
+    response_model=ApiResponse[DisbursementResponse],
 )
 def update_disbursement_status(
     disbursement_id: str,
     update: DisbursementUpdate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    disbursement = db.get(Disbursement, disbursement_id)
+    disbursement = db.get(
+        Disbursement,
+        disbursement_id,
+    )
 
     if disbursement is None:
         raise HTTPException(
@@ -262,34 +346,46 @@ def update_disbursement_status(
 
     try:
         if update.status == "INITIATED":
-            return disbursement_service.initiate_disbursement(
+            result = disbursement_service.initiate_disbursement(
                 db=db,
                 disbursement=disbursement,
             )
 
-        if update.status == "PROCESSING":
-            return disbursement_service.mark_processing(
+        elif update.status == "PROCESSING":
+            result = disbursement_service.mark_processing(
                 db=db,
                 disbursement=disbursement,
             )
 
-        if update.status == "PROCESSED":
-            return disbursement_service.process_disbursement(
+        elif update.status == "PROCESSED":
+            result = disbursement_service.process_disbursement(
                 db=db,
                 disbursement=disbursement,
                 bank_reference=update.bank_reference,
             )
 
-        if update.status == "FAILED":
-            return disbursement_service.fail_disbursement(
+        elif update.status == "FAILED":
+            result = disbursement_service.fail_disbursement(
                 db=db,
                 disbursement=disbursement,
-                failure_reason=update.failure_reason or "Disbursement failed",
+                failure_reason=(
+                    update.failure_reason
+                    or "Disbursement failed"
+                ),
             )
 
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid disbursement status",
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid disbursement status",
+            )
+
+        response_data = DisbursementResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Disbursement status updated successfully.",
         )
 
     except ValueError as exc:
@@ -298,10 +394,18 @@ def update_disbursement_status(
             detail=str(exc),
         )
 
+
+# ============================================================
 # Bank Disbursement Webhook
-@router.post("/webhooks/bank")
+# ============================================================
+
+@router.post(
+    "/webhooks/bank",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def bank_disbursement_webhook(
     webhook: BankDisbursementWebhook,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     disbursement = db.get(
@@ -354,15 +458,16 @@ def bank_disbursement_webhook(
                 if disbursement.status == "INITIATED":
                     disbursement = (
                         disbursement_service.mark_processing(
-                            db = db,
+                            db=db,
                             disbursement=disbursement,
                         )
                     )
-                
+
                 if disbursement.status != "PROCESSING":
                     raise ValueError(
                         "DISBURSEMEN_NOT_READY_FOR_BANK_SUCCESS"
                     )
+
                 result = (
                     disbursement_service.process_disbursement(
                         db=db,
@@ -370,21 +475,23 @@ def bank_disbursement_webhook(
                         bank_reference=webhook.bank_reference,
                     )
                 )
-                
+
             except ValueError as exc:
                 raise HTTPException(
                     status_code=409,
                     detail=str(exc),
                 )
 
-        reconciliation_result = reconciliation_service.reconcile_disbursement(
-            db=db,
-            disbursement_id=webhook.disbursement_id,
-            bank_reference=webhook.bank_reference,
-            bank_amount=webhook.bank_amount,
+        reconciliation_result = (
+            reconciliation_service.reconcile_disbursement(
+                db=db,
+                disbursement_id=webhook.disbursement_id,
+                bank_reference=webhook.bank_reference,
+                bank_amount=webhook.bank_amount,
+            )
         )
 
-        return {
+        response_data = {
             "message": (
                 "Duplicate webhook ignored"
                 if duplicate_webhook
@@ -402,21 +509,40 @@ def bank_disbursement_webhook(
             },
         }
 
+        return success_response(
+            request=request,
+            data=response_data,
+            message=(
+                "Duplicate bank webhook handled."
+                if duplicate_webhook
+                else "Bank disbursement processed successfully."
+            ),
+        )
+
     if disbursement.status == "FAILED":
-        return {
+        response_data = {
             "disbursement_id": disbursement.disbursement_id,
             "status": "FAILED",
             "bank_reference": disbursement.bank_reference,
             "failure_reason": disbursement.failure_reason,
             "duplicate_webhook": True,
-    }
+        }
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Duplicate failed bank webhook ignored.",
+        )
 
     if webhook.status == "FAILED":
         try:
             result = disbursement_service.fail_disbursement(
                 db=db,
                 disbursement=disbursement,
-                failure_reason=webhook.failure_reason or "Bank disbursement failed",
+                failure_reason=(
+                    webhook.failure_reason
+                    or "Bank disbursement failed"
+                ),
             )
         except ValueError as exc:
             raise HTTPException(
@@ -424,7 +550,7 @@ def bank_disbursement_webhook(
                 detail=str(exc),
             )
 
-        return {
+        response_data = {
             "message": "Disbursement failed",
             "disbursement_id": result.disbursement_id,
             "status": result.status,
@@ -432,17 +558,36 @@ def bank_disbursement_webhook(
             "failure_reason": result.failure_reason,
         }
 
-    return {
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Bank disbursement failure processed successfully.",
+        )
+
+    response_data = {
         "message": "Bank webhook received",
         "disbursement_id": disbursement.disbursement_id,
         "status": disbursement.status,
     }
 
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Bank webhook received successfully.",
+    )
 
+
+# ============================================================
 # Retry Disbursement
-@router.post("/{disbursement_id}/retry")
+# ============================================================
+
+@router.post(
+    "/{disbursement_id}/retry",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def retry_disbursement(
     disbursement_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = disbursement_retry_service.retry_disbursement(
@@ -456,17 +601,24 @@ def retry_disbursement(
             detail="Disbursement not found",
         )
 
-    return result
+    return success_response(
+        request=request,
+        data=result,
+        message="Disbursement retry processed successfully.",
+    )
 
 
-
+# ============================================================
 # Get Disbursement
+# ============================================================
+
 @router.get(
     "/{disbursement_id}",
-    response_model=DisbursementResponse,
+    response_model=ApiResponse[DisbursementResponse],
 )
 def get_disbursement(
     disbursement_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = db.get(
@@ -480,4 +632,10 @@ def get_disbursement(
             detail="Disbursement not found",
         )
 
-    return result
+    response_data = DisbursementResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Disbursement retrieved successfully.",
+    )

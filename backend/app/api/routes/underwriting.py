@@ -1,12 +1,12 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from backend.app.database import get_db
 from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
-from backend.app.schemas.underwriting import UnderwritingResult
+from backend.app.schemas.underwriting import UnderwritingResult, UnderwritingDecisionResponse
 from backend.app.services.credit_decision_service import credit_decision_service
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
 from backend.app.services.manual_review_service import manual_review_service
@@ -25,6 +25,9 @@ from backend.app.services.policy_version_service import policy_version_service
 from backend.app.models.loan_application import LoanApplication
 from backend.app.models.customer import Customer
 
+from backend.app.core.responses import success_response
+from backend.app.schemas.common import ApiResponse
+
 
 router = APIRouter(
     prefix="/underwriting",
@@ -34,11 +37,12 @@ router = APIRouter(
 
 @router.post(
     "/evaluate",
-    response_model=UnderwritingResult,
+    response_model=ApiResponse[UnderwritingResult],
 )
 def evaluate_application(
     application: ApplicationCreate,
     borrower: Borrower360,
+    request: Request,
     db: Session = Depends(get_db),
 ):
 
@@ -338,11 +342,21 @@ def evaluate_application(
 
             db.commit()
             
-    return result
+    response_data = UnderwritingResult.model_validate(result)
 
-@router.get("/{application_id}")
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Underwriting evaluation completed successfully.",
+    )
+
+@router.get(
+    "/{application_id}",
+    response_model=ApiResponse[UnderwritingDecisionResponse],
+    )
 def get_underwriting_result(
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = credit_decision_service.get_decision(
@@ -356,29 +370,35 @@ def get_underwriting_result(
             detail="Underwriting result not found",
         )
 
-    return {
-        "decision_id": result.decision_id,
-        "application_id": result.application_id,
-        "credit_score": result.credit_score,
-        "risk_grade": result.risk_grade,
-        "probability_of_default": result.probability_of_default,
-        "affordability_score": result.affordability_score,
-        "repayment_propensity": result.repayment_propensity,
-        "fraud_score": result.fraud_score,
-        "income_stability_score": result.income_stability_score,
-        "risk_segment": result.risk_segment,
-        "recommended_amount": result.recommended_amount,
-        "recommended_tenure": result.recommended_tenure,
-        "recommended_emi": result.recommended_emi,
-        "foir": result.foir,
-        "decision": result.decision,
-        "confidence": result.confidence,
-        "reason_codes": (
+    response_data = UnderwritingDecisionResponse(
+        decision_id=result.decision_id,
+        application_id=result.application_id,
+        credit_score=result.credit_score,
+        risk_grade=result.risk_grade,
+        probability_of_default=result.probability_of_default,
+        affordability_score=result.affordability_score,
+        repayment_propensity=result.repayment_propensity,
+        fraud_score=result.fraud_score,
+        income_stability_score=result.income_stability_score,
+        risk_segment=result.risk_segment,
+        recommended_amount=result.recommended_amount,
+        recommended_tenure=result.recommended_tenure,
+        recommended_emi=result.recommended_emi,
+        foir=result.foir,
+        decision=result.decision,
+        confidence=result.confidence,
+        reason_codes=(
             result.reason_codes.split(",")
             if result.reason_codes
             else []
         ),
-        "model_version": result.model_version,
-        "policy_version": result.policy_version,
-        "created_at": result.created_at,
-    }
+        model_version=result.model_version,
+        policy_version=result.policy_version,
+        created_at=result.created_at,
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Underwriting result retrieved successfully.",
+    )

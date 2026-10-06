@@ -1,10 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
-
+from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.review_exception import (
     ReviewExceptionAssign,
     ReviewExceptionClose,
@@ -14,7 +15,6 @@ from backend.app.schemas.review_exception import (
     ReviewExceptionResponse,
     ReviewExceptionResumeInformation,
 )
-
 from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.review_exception_service import (
     review_exception_service,
@@ -29,10 +29,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def create_review_exception(
     request: ReviewExceptionCreate,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -63,7 +64,16 @@ def create_review_exception(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Review exception created successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -82,10 +92,11 @@ def create_review_exception(
 
 @router.get(
     "/{exception_id}",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def get_review_exception(
     exception_id: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     result = review_exception_service.get_exception(
@@ -99,30 +110,55 @@ def get_review_exception(
             detail="Review exception not found.",
         )
 
-    return result
+    response_data = ReviewExceptionResponse.model_validate(
+        result,
+        from_attributes=True,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception retrieved successfully.",
+    )
 
 
 @router.get(
     "/application/{application_id}",
-    response_model=list[ReviewExceptionResponse],
+    response_model=ApiResponse[list[ReviewExceptionResponse]],
 )
 def get_application_exceptions(
     application_id: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
-    return review_exception_service.get_by_application(
+    result = review_exception_service.get_by_application(
         db=db,
         application_id=application_id,
+    )
+
+    response_data = [
+        ReviewExceptionResponse.model_validate(
+            item,
+            from_attributes=True,
+        )
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Application review exceptions retrieved successfully.",
     )
 
 
 @router.post(
     "/{exception_id}/assign",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def assign_review_exception(
     exception_id: str,
     request: ReviewExceptionAssign,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     exception = review_exception_service.get_exception(
@@ -166,7 +202,16 @@ def assign_review_exception(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Review exception assigned successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -185,11 +230,12 @@ def assign_review_exception(
 
 @router.post(
     "/{exception_id}/request-information",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def request_exception_information(
     exception_id: str,
     request: ReviewExceptionInformationRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     exception = review_exception_service.get_exception(
@@ -234,7 +280,16 @@ def request_exception_information(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Additional information requested successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -253,11 +308,12 @@ def request_exception_information(
 
 @router.post(
     "/{exception_id}/resume",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def resume_review_exception(
     exception_id: str,
     request: ReviewExceptionResumeInformation,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     exception = review_exception_service.get_exception(
@@ -301,7 +357,16 @@ def resume_review_exception(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Review exception resumed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -320,11 +385,12 @@ def resume_review_exception(
 
 @router.post(
     "/{exception_id}/resolve",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def resolve_review_exception(
     exception_id: str,
     request: ReviewExceptionResolve,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     exception = review_exception_service.get_exception(
@@ -370,7 +436,16 @@ def resolve_review_exception(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Review exception resolved successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -389,11 +464,12 @@ def resolve_review_exception(
 
 @router.post(
     "/{exception_id}/close",
-    response_model=ReviewExceptionResponse,
+    response_model=ApiResponse[ReviewExceptionResponse],
 )
 def close_review_exception(
     exception_id: str,
     request: ReviewExceptionClose,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     exception = review_exception_service.get_exception(
@@ -433,7 +509,16 @@ def close_review_exception(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ReviewExceptionResponse.model_validate(
+            result,
+            from_attributes=True,
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Review exception closed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()

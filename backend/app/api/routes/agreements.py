@@ -1,9 +1,17 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
-from backend.app.schemas.agreement import AgreementCreate, AgreementResponse, AgreementSign
+from backend.app.models.agreement import Agreement
+from backend.app.schemas.agreement import (
+    AgreementCreate,
+    AgreementResponse,
+    AgreementSign,
+)
+from backend.app.schemas.common import ApiResponse
+from backend.app.core.responses import success_response
 from backend.app.services.agreement_service import agreement_service
+
 
 router = APIRouter(
     prefix="/agreements",
@@ -13,10 +21,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=AgreementResponse,
+    response_model=ApiResponse[AgreementResponse],
 )
 def create_agreement(
     agreement: AgreementCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     agreement_id = f"AGR-{agreement.application_id}"
@@ -35,28 +44,31 @@ def create_agreement(
         signed_at=None,
     )
 
-    return result
+    response_data = AgreementResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Agreement created successfully.",
+    )
+
 
 @router.post(
     "/{agreement_id}/sign",
-    response_model=AgreementResponse,
+    response_model=ApiResponse[AgreementResponse],
 )
 def update_agreement_sign(
     agreement_id: str,
     sign_request: AgreementSign,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     agreement = db.get(
-        __import__(
-            "backend.app.models.agreement",
-            fromlist=["Agreement"],
-        ).Agreement,
+        Agreement,
         agreement_id,
     )
 
     if agreement is None:
-        from fastapi import HTTPException
-
         raise HTTPException(
             status_code=404,
             detail="Agreement not found",
@@ -64,25 +76,39 @@ def update_agreement_sign(
 
     if sign_request.esign_status == "INITIATED":
         if not sign_request.esign_reference:
-            from fastapi import HTTPException
-
             raise HTTPException(
                 status_code=400,
                 detail="esign_reference is required when initiating eSign",
             )
 
-        return agreement_service.initiate_esign(
+        result = agreement_service.initiate_esign(
             db=db,
             agreement=agreement,
             esign_provider=agreement.esign_provider or "UNKNOWN",
             esign_reference=sign_request.esign_reference,
         )
 
-    return agreement_service.complete_esign(
+        response_data = AgreementResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Agreement eSign initiated successfully.",
+        )
+
+    result = agreement_service.complete_esign(
         db=db,
         agreement=agreement,
         esign_status=sign_request.esign_status,
         esign_reference=sign_request.esign_reference,
         signed_at=sign_request.signed_at,
         failure_reason=sign_request.failure_reason,
+    )
+
+    response_data = AgreementResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Agreement eSign status updated successfully.",
     )

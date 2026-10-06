@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class CollectionCreateRequest(BaseModel):
@@ -24,6 +24,8 @@ class CollectionCreateRequest(BaseModel):
 
 
 class CollectionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     collection_id: str
     application_id: str
     repayment_schedule_id: str | None = None
@@ -50,6 +52,8 @@ class CollectionResponse(BaseModel):
     }
 
 class CollectionSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     application_id: str
     repayment_schedule_id: str
 
@@ -61,6 +65,8 @@ class CollectionSummaryResponse(BaseModel):
     status: str | None = None
 
 class ApplicationOverdueSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     application_id: str
     total_overdue_installments: int
     total_overdue_amount: Decimal
@@ -85,4 +91,5 @@ class CollectionRecordRequest(BaseModel):
 
 
 class CollectionRecordResponse(CollectionResponse):
+    model_config = ConfigDict(from_attributes=True)
     pass

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MandateCreate(BaseModel):
@@ -18,6 +18,8 @@ class MandateUpdate(BaseModel):
 
 
 class MandateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     mandate_id: str
     application_id: str
 

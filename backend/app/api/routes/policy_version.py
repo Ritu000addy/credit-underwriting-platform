@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.policy_version_governance import (
     PolicyVersionAction,
     PolicyVersionCreate,
@@ -24,10 +26,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def create_policy_version(
     request: PolicyVersionCreate,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -61,7 +64,13 @@ def create_policy_version(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version created successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -80,28 +89,49 @@ def create_policy_version(
 
 @router.get(
     "",
-    response_model=list[PolicyVersionResponse],
+    response_model=ApiResponse[list[PolicyVersionResponse]],
 )
 def list_policy_versions(
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
-    return policy_version_service.list_policy_versions(
+    result = policy_version_service.list_policy_versions(
         db=db,
+    )
+
+    response_data = [
+        PolicyVersionResponse.model_validate(item)
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy versions retrieved successfully.",
     )
 
 
 @router.get(
     "/{policy_version}",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def get_policy_version(
     policy_version: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
-        return policy_version_service.get_policy_version(
+        result = policy_version_service.get_policy_version(
             db=db,
             policy_version=policy_version,
+        )
+
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version retrieved successfully.",
         )
 
     except ValueError as exc:
@@ -113,14 +143,15 @@ def get_policy_version(
 
 @router.post(
     "/activate",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def activate_policy_version(
     request: PolicyVersionAction,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
-    policy_version: request.policy_version
-    
+    policy_version = request.policy_version
+
     try:
         policy = policy_version_service.get_policy_version(
             db=db,
@@ -161,7 +192,13 @@ def activate_policy_version(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version activated successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -180,14 +217,15 @@ def activate_policy_version(
 
 @router.post(
     "/deactivate",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def deactivate_policy_version(
     request: PolicyVersionAction,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
+    policy_version = request.policy_version
 
-    policy_version: request.policy_version
     try:
         policy = policy_version_service.get_policy_version(
             db=db,
@@ -228,7 +266,13 @@ def deactivate_policy_version(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version deactivated successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -247,14 +291,14 @@ def deactivate_policy_version(
 
 @router.post(
     "/retire",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def retire_policy_version(
     request: PolicyVersionAction,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
-
-    policy_version: request.policy_version
+    policy_version = request.policy_version
 
     try:
         policy = policy_version_service.get_policy_version(
@@ -296,7 +340,13 @@ def retire_policy_version(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version retired successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -315,10 +365,11 @@ def retire_policy_version(
 
 @router.post(
     "/rollback",
-    response_model=PolicyVersionResponse,
+    response_model=ApiResponse[PolicyVersionResponse],
 )
 def rollback_policy_version(
     request: PolicyVersionRollback,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -349,7 +400,13 @@ def rollback_policy_version(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version rollback completed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()

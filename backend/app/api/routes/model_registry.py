@@ -1,9 +1,11 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.model_registry import (
     ModelApprovalRequest,
     ModelRegistryCreate,
@@ -27,10 +29,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def register_model(
     request: ModelRegistryCreate,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -72,7 +75,13 @@ def register_model(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model registered successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -91,24 +100,37 @@ def register_model(
 
 @router.get(
     "/{model_name}/versions",
-    response_model=list[ModelRegistryResponse],
+    response_model=ApiResponse[list[ModelRegistryResponse]],
 )
 def list_model_versions(
     model_name: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
-    return model_registry_service.list_versions(
+    result = model_registry_service.list_versions(
         db=db,
         model_name=model_name,
+    )
+
+    response_data = [
+        ModelRegistryResponse.model_validate(item)
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model versions retrieved successfully.",
     )
 
 
 @router.get(
     "/{model_name}/active",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def get_active_model(
     model_name: str,
+    api_request: Request,
     environment: str | None = None,
     db: Session = Depends(get_db),
 ):
@@ -124,16 +146,23 @@ def get_active_model(
             detail="ACTIVE_MODEL_NOT_FOUND",
         )
 
-    return result
+    response_data = ModelRegistryResponse.model_validate(result)
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Active model retrieved successfully.",
+    )
 
 
 @router.get(
     "/{model_name}/{model_version}",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def get_model(
     model_name: str,
     model_version: str,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     result = model_registry_service.get_model(
@@ -148,15 +177,22 @@ def get_model(
             detail="MODEL_NOT_FOUND",
         )
 
-    return result
+    response_data = ModelRegistryResponse.model_validate(result)
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model retrieved successfully.",
+    )
 
 
 @router.post(
     "/validation/start",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def start_model_validation(
     request: ModelValidationStart,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     model = model_registry_service.get_model(
@@ -196,7 +232,13 @@ def start_model_validation(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model validation started successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -215,10 +257,11 @@ def start_model_validation(
 
 @router.post(
     "/validation/complete",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def complete_model_validation(
     request: ModelValidationComplete,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     model = model_registry_service.get_model(
@@ -264,7 +307,13 @@ def complete_model_validation(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model validation completed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -283,10 +332,11 @@ def complete_model_validation(
 
 @router.post(
     "/approve",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def approve_model(
     request: ModelApprovalRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     model = model_registry_service.get_model(
@@ -331,7 +381,13 @@ def approve_model(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model approved successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -350,10 +406,11 @@ def approve_model(
 
 @router.post(
     "/activate",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def activate_model(
     request: ModelVersionRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     model = model_registry_service.get_model(
@@ -397,7 +454,13 @@ def activate_model(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model activated successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -416,10 +479,11 @@ def activate_model(
 
 @router.post(
     "/deactivate",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def deactivate_model(
     request: ModelVersionRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     model = model_registry_service.get_model(
@@ -463,7 +527,13 @@ def deactivate_model(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model deactivated successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()
@@ -482,10 +552,11 @@ def deactivate_model(
 
 @router.post(
     "/rollback",
-    response_model=ModelRegistryResponse,
+    response_model=ApiResponse[ModelRegistryResponse],
 )
 def rollback_model(
     request: ModelRollbackRequest,
+    api_request: Request,
     db: Session = Depends(get_db),
 ):
     current_model = model_registry_service.get_model(
@@ -541,7 +612,13 @@ def rollback_model(
         db.commit()
         db.refresh(result)
 
-        return result
+        response_data = ModelRegistryResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Model rollback completed successfully.",
+        )
 
     except ValueError as exc:
         db.rollback()

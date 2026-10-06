@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
+from pydantic import ConfigDict
 
 
 class DeviceBehaviourCreate(BaseModel):
@@ -25,3 +27,10 @@ class DeviceBehaviourCreate(BaseModel):
     fraud_indicator: Optional[str] = None
 
     analysis_reference: Optional[str] = None
+
+
+class DeviceBehaviourResponse(DeviceBehaviourCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    device_behaviour_id: str
+    analyzed_at: datetime

@@ -1,11 +1,16 @@
 from decimal import Decimal
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
+from backend.app.core.responses import success_response
+from backend.app.services.reconciliation_service import (
+    reconciliation_service,
+)
 
-from backend.app.services.reconciliation_service import reconciliation_service
 
 router = APIRouter(
     prefix="/post-disbursement",
@@ -13,9 +18,17 @@ router = APIRouter(
 )
 
 
-@router.post("/reconciliation/check")
+# ============================================================
+# Reconciliation Check
+# ============================================================
+
+@router.post(
+    "/reconciliation/check",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def check_reconciliation(
     disbursement_id: str,
+    request: Request,
     bank_reference: str | None = None,
     bank_amount: Decimal | None = None,
     db: Session = Depends(get_db),
@@ -27,7 +40,7 @@ def check_reconciliation(
         bank_amount=bank_amount,
     )
 
-    return {
+    response_data = {
         "status": result.status,
         "disbursement_id": result.disbursement_id,
         "bank_reference": result.bank_reference,
@@ -36,9 +49,24 @@ def check_reconciliation(
         "mismatch_reason": result.mismatch_reason,
     }
 
-@router.post("/reconciliation/close")
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Reconciliation check completed successfully.",
+    )
+
+
+# ============================================================
+# Close Reconciliation
+# ============================================================
+
+@router.post(
+    "/reconciliation/close",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def close_reconciliation(
     reconciliation_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -65,18 +93,32 @@ def close_reconciliation(
             detail=str(exc),
         )
 
-    return {
-        "message": "Reconciliation closed successfully",
+    response_data = {
         "reconciliation_id": result.reconciliation_id,
         "disbursement_id": result.disbursement_id,
         "reconciliation_status": result.reconciliation_status,
         "reconciled_at": result.reconciled_at,
     }
 
-@router.post("/operations-queue")
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Reconciliation closed successfully.",
+    )
+
+
+# ============================================================
+# Update Operations Queue Status
+# ============================================================
+
+@router.post(
+    "/operations-queue",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def update_operations_queue_status(
     queue_id: str,
     queue_status: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -110,8 +152,7 @@ def update_operations_queue_status(
             detail=str(exc),
         )
 
-    return {
-        "message": "Operations queue status updated successfully",
+    response_data = {
         "queue_id": result.queue_id,
         "reconciliation_id": result.reconciliation_id,
         "disbursement_id": result.disbursement_id,
@@ -119,3 +160,9 @@ def update_operations_queue_status(
         "queue_status": result.queue_status,
         "reason": result.reason,
     }
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Operations queue status updated successfully.",
+    )

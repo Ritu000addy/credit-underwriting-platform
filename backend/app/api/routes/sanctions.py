@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -9,6 +9,8 @@ from backend.app.schemas.sanction import (
     SanctionCreate,
     SanctionResponse,
 )
+from backend.app.schemas.common import ApiResponse
+from backend.app.core.responses import success_response
 from backend.app.services.sanction_service import sanction_service
 
 
@@ -20,10 +22,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=SanctionResponse,
+    response_model=ApiResponse[SanctionResponse],
 )
 def create_sanction(
     sanction: SanctionCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     sanction_id = f"SAN-{uuid.uuid4().hex[:12].upper()}"
@@ -43,7 +46,13 @@ def create_sanction(
             expires_at=sanction.expires_at,
         )
 
-        return result
+        response_data = SanctionResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Sanction created successfully.",
+        )
 
     except Exception as exc:
         db.rollback()
@@ -55,10 +64,11 @@ def create_sanction(
 
 @router.get(
     "/{sanction_id}",
-    response_model=SanctionResponse,
+    response_model=ApiResponse[SanctionResponse],
 )
 def get_sanction(
     sanction_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = db.get(
@@ -72,4 +82,10 @@ def get_sanction(
             detail="Sanction not found",
         )
 
-    return result
+    response_data = SanctionResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Sanction retrieved successfully.",
+    )

@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
+from backend.app.schemas.underwriting_validation import (
+    UnderwritingValidationResponse,
+)
 from backend.app.services.borrower360_service import borrower360_service
 from backend.app.services.underwriting_validation_service import (
     underwriting_validation_service,
-)
-from backend.app.schemas.underwriting_validation import (
-    UnderwritingValidationResponse,
 )
 
 
@@ -19,11 +21,12 @@ router = APIRouter(
 
 @router.get(
     "/{customer_id}/validation",
-    response_model=UnderwritingValidationResponse,
+    response_model=ApiResponse[UnderwritingValidationResponse],
 )
 def validate_underwriting_input(
     customer_id: str,
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -39,7 +42,13 @@ def validate_underwriting_input(
 
         result.application_id = application_id
 
-        return result
+        response_data = UnderwritingValidationResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Underwriting input validation completed successfully.",
+        )
 
     except ValueError as exc:
 

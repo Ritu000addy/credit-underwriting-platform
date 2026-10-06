@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
+from backend.app.schemas.policy_validation import (
+    PolicyValidationResponse,
+)
 from backend.app.services.borrower360_service import borrower360_service
 from backend.app.services.policy_validation_service import (
     policy_validation_service,
-)
-from backend.app.schemas.policy_validation import (
-    PolicyValidationResponse,
 )
 
 
@@ -19,11 +21,12 @@ router = APIRouter(
 
 @router.get(
     "/{customer_id}/policy-validation",
-    response_model=PolicyValidationResponse,
+    response_model=ApiResponse[PolicyValidationResponse],
 )
 def validate_policy(
     customer_id: str,
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -38,7 +41,13 @@ def validate_policy(
             application_id=application_id,
         )
 
-        return result
+        response_data = PolicyValidationResponse.model_validate(result)
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Policy validation completed successfully.",
+        )
 
     except ValueError as exc:
 

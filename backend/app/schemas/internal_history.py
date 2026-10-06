@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
+from pydantic import ConfigDict
 
 
 class InternalHistoryCreate(BaseModel):
@@ -22,3 +24,9 @@ class InternalHistoryCreate(BaseModel):
 
     last_loan_date: Optional[str] = None
     analysis_reference: Optional[str] = None
+
+class InternalHistoryResponse(InternalHistoryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    internal_history_id: str
+    analyzed_at: datetime

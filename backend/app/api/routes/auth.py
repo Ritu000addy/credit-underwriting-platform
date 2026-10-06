@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.core.security import (
     create_access_token,
     get_current_user,
@@ -14,6 +15,7 @@ from backend.app.schemas.auth import (
     AuthUserResponse,
     TokenResponse,
 )
+from backend.app.schemas.common import ApiResponse
 from backend.app.services.auth_user_service import (
     auth_user_service,
 )
@@ -27,10 +29,11 @@ router = APIRouter(
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
+    response_model=ApiResponse[TokenResponse],
 )
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     user = auth_user_service.authenticate_user(
@@ -55,17 +58,33 @@ def login(
         user_id=user.user_id
     )
 
-    return TokenResponse(
+    response_data = TokenResponse(
         access_token=access_token,
         token_type="bearer",
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Login successful.",
     )
 
 
 @router.get(
     "/me",
-    response_model=AuthUserResponse,
+    response_model=ApiResponse[AuthUserResponse],
 )
 def get_me(
+    request: Request,
     current_user: AuthUser = Depends(get_current_user),
 ):
-    return current_user
+    response_data = AuthUserResponse.model_validate(
+        current_user,
+        from_attributes=True,
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Current user retrieved successfully.",
+    )

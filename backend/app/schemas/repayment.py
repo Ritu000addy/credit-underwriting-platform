@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class RepaymentScheduleGenerateRequest(BaseModel):
@@ -14,6 +14,8 @@ class RepaymentScheduleGenerateRequest(BaseModel):
 
 
 class RepaymentScheduleResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     repayment_schedule_id: str
     application_id: str
     disbursement_id: str
@@ -42,6 +44,8 @@ class RepaymentCreateRequest(BaseModel):
 
 
 class RepaymentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     repayment_id: str
     application_id: str
     repayment_schedule_id: str | None = None
@@ -61,6 +65,8 @@ class RepaymentResponse(BaseModel):
     }
 
 class RepaymentSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     application_id: str
     disbursement_id: str
     total_installments: int

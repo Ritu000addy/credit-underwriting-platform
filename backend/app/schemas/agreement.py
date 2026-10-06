@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AgreementCreate(BaseModel):
@@ -21,6 +21,9 @@ class AgreementSign(BaseModel):
 
 
 class AgreementResponse(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
+    
     agreement_id: str
     application_id: str
     sanction_id: str

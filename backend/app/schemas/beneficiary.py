@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class BeneficiaryCreate(BaseModel):
@@ -12,6 +12,8 @@ class BeneficiaryCreate(BaseModel):
 
 
 class BeneficiaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     beneficiary_id: str
     application_id: str
     account_holder_name: str | None = None

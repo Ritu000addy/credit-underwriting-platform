@@ -289,7 +289,7 @@ def test_end_to_end_origination_to_manual_review():
         "Underwriting evaluation",
     )
 
-    underwriting_payload = underwriting_response.json()
+    underwriting_payload = underwriting_response.json()["data"]
 
     decision_payload = underwriting_payload.get("decision")
 

@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
+from pydantic import ConfigDict
 
 
 class EmploymentCreate(BaseModel):
@@ -17,3 +19,9 @@ class EmploymentCreate(BaseModel):
 
     income_source: Optional[str] = None
     analysis_reference: Optional[str] = None
+
+class EmploymentResponse(EmploymentCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    employment_id: str
+    analyzed_at: datetime

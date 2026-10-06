@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends
+from typing import Any
+
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
+from backend.app.schemas.common import ApiResponse
 from backend.app.services.audit_log_service import audit_log_service
 
 
@@ -11,9 +15,13 @@ router = APIRouter(
 )
 
 
-@router.get("/{application_id}")
+@router.get(
+    "/{application_id}",
+    response_model=ApiResponse[dict[str, Any]],
+)
 def get_application_audit(
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     results = audit_log_service.get_by_application(
@@ -21,7 +29,7 @@ def get_application_audit(
         application_id=application_id,
     )
 
-    return {
+    response_data = {
         "application_id": application_id,
         "audit_logs": [
             {
@@ -42,3 +50,9 @@ def get_application_audit(
             for result in results
         ],
     }
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Application audit logs retrieved successfully.",
+    )

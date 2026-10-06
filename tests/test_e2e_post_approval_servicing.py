@@ -210,7 +210,7 @@ def test_end_to_end_post_approval_servicing():
         "Agreement creation",
     )
 
-    agreement_payload = agreement_response.json()
+    agreement_payload = agreement_response.json()["data"]
 
     agreement_id = find_value(
         agreement_payload,
@@ -240,7 +240,7 @@ def test_end_to_end_post_approval_servicing():
         "Agreement eSign initiation",
     )
 
-    esign_init_payload = esign_init_response.json()
+    esign_init_payload = esign_init_response.json()["data"]
 
     assert esign_init_payload["esign_status"] == "INITIATED"
     assert esign_init_payload["agreement_status"] == "ACTIVE"
@@ -266,7 +266,7 @@ def test_end_to_end_post_approval_servicing():
         "Agreement eSign completion",
     )
 
-    esign_complete_payload = esign_complete_response.json()
+    esign_complete_payload = esign_complete_response.json()["data"]
 
     assert esign_complete_payload["esign_status"] == "SIGNED"
     assert esign_complete_payload["agreement_status"] == "COMPLETED"
@@ -318,7 +318,7 @@ def test_end_to_end_post_approval_servicing():
         "Mandate initiation",
     )
 
-    mandate_init_payload = mandate_init_response.json()
+    mandate_init_payload = mandate_init_response.json()["data"]
 
     assert mandate_init_payload["status"] == "INITIATED"
 
@@ -342,7 +342,7 @@ def test_end_to_end_post_approval_servicing():
         "Mandate completion",
     )
 
-    mandate_complete_payload = mandate_complete_response.json()
+    mandate_complete_payload = mandate_complete_response.json()["data"]
 
     assert mandate_complete_payload["status"] == "COMPLETED"
 
@@ -491,7 +491,7 @@ def test_end_to_end_post_approval_servicing():
         "Disbursement PROCESSING",
     )
 
-    processing_payload = processing_response.json()
+    processing_payload = processing_response.json()["data"]
 
     bank_reference = find_value(
         processing_payload,
@@ -536,7 +536,7 @@ def test_end_to_end_post_approval_servicing():
         "Disbursement retrieval",
     )
 
-    final_disbursement = disbursement_get_response.json()
+    final_disbursement = disbursement_get_response.json()["data"]
 
     final_status = find_value(
         final_disbursement,
@@ -570,7 +570,7 @@ def test_end_to_end_post_approval_servicing():
         "Repayment schedule generation",
     )
 
-    schedule_payload = schedule_response.json()
+    schedule_payload = schedule_response.json()["data"]
 
     assert isinstance(schedule_payload, list)
     assert len(schedule_payload) == 12
@@ -651,7 +651,7 @@ def test_end_to_end_post_approval_servicing():
         "Collection recording",
     )
 
-    collection_payload = collection_response.json()
+    collection_payload = collection_response.json()["data"]
 
     assert collection_payload is not None
 
