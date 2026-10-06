@@ -8,6 +8,7 @@ from backend.app.models.internal_history import InternalHistory
 from backend.app.models.device_behaviour import DeviceBehaviour
 from backend.app.models.document import Document
 from backend.app.models.credit_decision import CreditDecision
+from backend.app.models.policy_version import PolicyVersion
 from backend.app.models.credit_policy_rule import CreditPolicyRule
 from backend.app.models.model_registry import ModelRegistry
 from backend.app.models.audit_log import AuditLog

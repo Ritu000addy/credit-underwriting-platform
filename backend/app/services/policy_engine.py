@@ -519,7 +519,7 @@ class PolicyEngine:
                         rule_id="LOAN_AMOUNT_TENURE",
                         status="PASS",
                         reason=("Requested loan amount and tenure "
-                            "are within permitted limits",
+                            "are within permitted limits"
                         ),
                     )
                 )

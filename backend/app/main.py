@@ -1,5 +1,11 @@
 import uuid
-from fastapi import FastAPI, Request
+import logging
+import time
+
+from sqlalchemy import text
+
+from backend.app.database import engine
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
 
 from sqlalchemy.exc import IntegrityError
@@ -143,6 +149,8 @@ from backend.app.api.routes.lms import router as lms_router
 
 from backend.app.api.routes.auth import router as auth_router
 
+from backend.app.api.routes.operations import router as operations_router
+
 
 
 app = FastAPI(
@@ -150,6 +158,8 @@ app = FastAPI(
     description="GenAI-enabled credit underwriting and disbursement platform",
     version="0.1.0"
 )
+
+http_logger = logging.getLogger("backend.http")
 
 @app.exception_handler(RequestValidationError)
 async def handle_request_validation_error(
@@ -201,21 +211,45 @@ async def request_id_middleware(
 ):
     request_id = request.headers.get(
         "X-Request-ID"
+    ) or (
+        f"REQ-{uuid.uuid4().hex[:12].upper()}"
     )
-
-    if not request_id:
-        request_id = (
-            f"REQ-{uuid.uuid4().hex[:12].upper()}"
-        )
 
     request.state.request_id = request_id
 
-    response = await call_next(request)
+    start_time = time.perf_counter()
+    response = None
 
-    response.headers["X-Request-ID"] = request_id
+    try:
+        response = await call_next(request)
 
-    return response
+        response.headers["X-Request-ID"] = request_id
 
+        return response
+
+    finally:
+        duration_ms = (
+            time.perf_counter() - start_time
+        ) * 1000
+
+        status_code = (
+            response.status_code
+            if response is not None
+            else 500
+        )
+
+        http_logger.info(
+            "request_completed "
+            "request_id=%s method=%s path=%s "
+            "status_code=%s duration_ms=%.2f",
+            request_id,
+            request.method,
+            request.url.path,
+            status_code,
+            duration_ms,
+        )
+
+    
 
 # 1. LOS Origination
 app.include_router(customers_router)
@@ -277,12 +311,33 @@ app.include_router(collections_router)
 # 16. LMS
 app.include_router(lms_router)
 
+app.include_router(operations_router)
+
 app.include_router(auth_router)
 
 @app.get("/health")
 def health_check():
-    return {
-        "status": "healthy",
-        "service": "AI Credit Underwriting Platform",
-        "version": "0.1.0",
-    }
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+        http_logger.info(
+            "health_check status=healthy database=healthy"
+        )
+
+        return {
+            "status": "healthy",
+            "service": "AI Credit Underwriting Platform",
+            "version": "0.1.0",
+            "database": "healthy",
+        }
+
+    except Exception:
+        http_logger.exception(
+            "health_check status=unhealthy database=unhealthy"
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail="Database health check failed.",
+        )

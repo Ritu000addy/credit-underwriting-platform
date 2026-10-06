@@ -120,7 +120,7 @@ class PostDisbursementService:
             disbursement_id=disbursement_id,
             application_id=application_id,
             disbursement_amount=disbursement_amount,
-            status="PROCESSED",
+            status="CREATED",
             sanction_id=sanction_id,
             beneficiary_reference=beneficiary_reference,
             bank_reference=bank_reference,

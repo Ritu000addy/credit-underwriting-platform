@@ -43,6 +43,7 @@ class DisbursementEligibilityRequest(BaseModel):
     application_id: str
     sanction_id: str
     disbursement_amount: Decimal
+    beneficiary_reference: str | None = None
 
 
 class DisbursementEligibilityResponse(BaseModel):
