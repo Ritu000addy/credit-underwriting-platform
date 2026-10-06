@@ -8,4 +8,4 @@ pandas
 scikit-learn
 requests
 alembic
-jwt
+PyJWT>=2.15.1
