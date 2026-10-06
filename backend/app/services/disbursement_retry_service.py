@@ -81,18 +81,45 @@ class DisbursementRetryService:
         disbursement_id: str,
     ) -> dict:
 
-        eligibility = self.can_retry(
-            db=db,
-            disbursement_id=disbursement_id,
+        disbursement = (
+            db.query(Disbursement)
+            .filter(
+                Disbursement.disbursement_id == disbursement_id
+            )
+            .with_for_update()
+            .first()
         )
 
-        if not eligibility["eligible"]:
-            return eligibility
+        if disbursement is None:
+            return {
+                "eligible": False,
+                "disbursement_id": disbursement_id,
+                "reason": "DISBURSEMENT_NOT_FOUND",
+            }
 
-        disbursement = db.get(
-            Disbursement,
-            disbursement_id,
-        )
+        if disbursement.status != "FAILED":
+            return {
+                "eligible": False,
+                "disbursement_id": disbursement_id,
+                "reason": "DISBURSEMENT_NOT_FAILED",
+            }
+
+        if not self.is_retryable(disbursement.failure_reason):
+            return {
+                "eligible": False,
+                "disbursement_id": disbursement_id,
+                "reason": "FAILURE_NOT_RETRYABLE",
+            }
+
+        if (
+            disbursement.retry_attempts
+            >= self.MAX_RETRY_ATTEMPTS
+        ):
+            return {
+                "eligible": False,
+                "disbursement_id": disbursement_id,
+                "reason": "MAX_RETRY_ATTEMPTS_EXCEEDED",
+            }
 
         disbursement.retry_attempts += 1
 
@@ -149,9 +176,6 @@ class DisbursementRetryService:
             request_reference=disbursement.disbursement_id,
         )
 
-        db.commit()
-        db.refresh(disbursement)
-
         # Ensure the internal ledger entry exists after a
         # successful retry, just as it does for normal initiation.
         existing_ledger_entry = db.query(InternalLedger).filter(
@@ -169,6 +193,7 @@ class DisbursementRetryService:
                 internal_reference=f"LEDGER-{disbursement.disbursement_id}",
             )
 
+        db.commit()
         db.refresh(disbursement)
 
         return {

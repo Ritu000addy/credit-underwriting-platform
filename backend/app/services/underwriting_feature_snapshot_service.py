@@ -32,7 +32,7 @@ class UnderwritingFeatureSnapshotService:
         )
 
         db.add(snapshot)
-        db.commit()
+        db.flush()
         db.refresh(snapshot)
 
         return snapshot

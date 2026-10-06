@@ -21,13 +21,7 @@ class ApplicationService:
         )
 
         if customer is None:
-            customer = Customer(
-                customer_id=application.customer_id,
-                kyc_status="PENDING",
-            )
-
-            db.add(customer)
-            db.flush()
+            raise ValueError("CUSTOMER_NOT_FOUND")
 
         existing_application = db.get(
             LoanApplication,

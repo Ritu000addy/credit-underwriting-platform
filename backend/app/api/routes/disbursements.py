@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.database import get_db
 
@@ -112,6 +113,7 @@ def check_disbursement_eligibility(
         application_id=request.application_id,
         sanction_id=request.sanction_id,
         disbursement_amount=request.disbursement_amount,
+        beneficiary_reference=request.beneficiary_reference,
     )
 
 # Create Disbursement
@@ -126,32 +128,57 @@ def create_disbursement(
     existing_disbursement = (
         db.query(Disbursement)
         .filter(
-            Disbursement.idempotency_key == disbursement.idempotency_key
+            Disbursement.idempotency_key
+            == disbursement.idempotency_key
         )
         .first()
     )
 
     if existing_disbursement is not None:
+
+        same_request = (
+            existing_disbursement.application_id
+            == disbursement.application_id
+            and existing_disbursement.sanction_id
+            == disbursement.sanction_id
+            and existing_disbursement.disbursement_amount
+            == disbursement.disbursement_amount
+            and existing_disbursement.beneficiary_reference
+            == disbursement.beneficiary_reference
+            and existing_disbursement.payment_provider
+            == disbursement.payment_provider
+        )
+
+        if not same_request:
+            raise HTTPException(
+                status_code=409,
+                detail="IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
+            )
+
         return existing_disbursement
 
-    eligibility = disbursement_eligibility_service.check_eligibility(
-        db=db,
-        application_id=disbursement.application_id,
-        sanction_id=disbursement.sanction_id,
-        disbursement_amount=disbursement.disbursement_amount,
-        beneficiary_reference=disbursement.beneficiary_reference,
+    eligibility = (
+        disbursement_eligibility_service.check_eligibility(
+            db=db,
+            application_id=disbursement.application_id,
+            sanction_id=disbursement.sanction_id,
+            disbursement_amount=disbursement.disbursement_amount,
+            beneficiary_reference=disbursement.beneficiary_reference,
+        )
     )
 
-    if not eligibility.eligible:
+    if not eligibility["eligible"]:
         raise HTTPException(
             status_code=422,
             detail={
                 "code": "DISBURSEMENT_NOT_ELIGIBLE",
-                "reasons": eligibility.reasons,
+                "reasons": eligibility["reasons"],
             },
         )
-        
-    disbursement_id = f"DISB-{uuid.uuid4().hex[:12].upper()}"
+
+    disbursement_id = (
+        f"DISB-{uuid.uuid4().hex[:12].upper()}"
+    )
 
     try:
         result = disbursement_service.create_disbursement(
@@ -169,10 +196,51 @@ def create_disbursement(
         return result
 
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(
             status_code=409,
             detail=str(exc),
         )
+
+    except IntegrityError:
+        db.rollback()
+
+        existing_disbursement = (
+            db.query(Disbursement)
+            .filter(
+                Disbursement.idempotency_key
+                == disbursement.idempotency_key
+            )
+            .first()
+        )
+
+        if existing_disbursement is None:
+            raise HTTPException(
+                status_code=409,
+                detail="DISBURSEMENT_CREATE_CONFLICT",
+            )
+
+        same_request = (
+            existing_disbursement.application_id
+            == disbursement.application_id
+            and existing_disbursement.sanction_id
+            == disbursement.sanction_id
+            and existing_disbursement.disbursement_amount
+            == disbursement.disbursement_amount
+            and existing_disbursement.beneficiary_reference
+            == disbursement.beneficiary_reference
+            and existing_disbursement.payment_provider
+            == disbursement.payment_provider
+        )
+
+        if not same_request:
+            raise HTTPException(
+                status_code=409,
+                detail="IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
+            )
+
+        return existing_disbursement
+
 
 # Update Disbursement
 @router.post(
@@ -283,11 +351,26 @@ def bank_disbursement_webhook(
             result = disbursement
         else:
             try:
-                result = disbursement_service.process_disbursement(
-                    db=db,
-                    disbursement=disbursement,
-                    bank_reference=webhook.bank_reference,
+                if disbursement.status == "INITIATED":
+                    disbursement = (
+                        disbursement_service.mark_processing(
+                            db = db,
+                            disbursement=disbursement,
+                        )
+                    )
+                
+                if disbursement.status != "PROCESSING":
+                    raise ValueError(
+                        "DISBURSEMEN_NOT_READY_FOR_BANK_SUCCESS"
+                    )
+                result = (
+                    disbursement_service.process_disbursement(
+                        db=db,
+                        disbursement=disbursement,
+                        bank_reference=webhook.bank_reference,
+                    )
                 )
+                
             except ValueError as exc:
                 raise HTTPException(
                     status_code=409,

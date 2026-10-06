@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.repayment_schedule import RepaymentSchedule
 from backend.app.models.repayment import Repayment
+from backend.app.models.disbursement import Disbursement
 
 class RepaymentScheduleService:
 
@@ -25,6 +26,36 @@ class RepaymentScheduleService:
         status: str,
         paid_at: datetime | None = None,
     ) -> RepaymentSchedule:
+
+        if status != "PENDING":
+            raise ValueError(
+                "INVALID_INITIAL_REPAYMENT_SCHEDULE_STATUS"
+            )
+
+        disbursement = db.get(
+            Disbursement,
+            disbursement_id,
+        )
+
+        if disbursement is None:
+            raise ValueError(
+                "DISBURSEMENT_NOT_FOUND"
+            )
+
+        if disbursement.application_id != application_id:
+            raise ValueError(
+                "DISBURSEMENT_APPLICATION_MISMATCH"
+            )
+
+        if disbursement.status != "PROCESSED":
+            raise ValueError(
+                "DISBURSEMENT_NOT_PROCESSED"
+            )
+
+        if paid_at is not None:
+            raise ValueError(
+                "PENDING_INSTALLMENT_CANNOT_HAVE_PAID_AT"
+            )
 
         installment = RepaymentSchedule(
             repayment_schedule_id=repayment_schedule_id,
@@ -56,6 +87,40 @@ class RepaymentScheduleService:
         tenure_months: int,
         first_due_date: datetime,
     ) -> list[RepaymentSchedule]:
+
+        disbursement = (
+            db.query(Disbursement)
+            .filter(
+                Disbursement.disbursement_id == disbursement_id
+            )
+            .with_for_update()
+            .first()
+        )
+
+        if disbursement is None:
+            raise ValueError(
+                "DISBURSEMENT_NOT_FOUND"
+            )
+
+        if disbursement.application_id != application_id:
+            raise ValueError(
+                "DISBURSEMENT_APPLICATION_MISMATCH"
+            )
+
+        if disbursement.status != "PROCESSED":
+            raise ValueError(
+                "DISBURSEMENT_NOT_PROCESSED"
+            )
+
+        if principal <= Decimal("0.00"):
+            raise ValueError(
+                "INVALID_SCHEDULE_PRINCIPAL"
+            )
+
+        if tenure_months <= 0:
+            raise ValueError(
+                "INVALID_SCHEDULE_TENURE"
+            )
 
         existing_schedule = (
             db.query(RepaymentSchedule)

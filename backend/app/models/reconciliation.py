@@ -20,6 +20,14 @@ class Reconciliation(Base):
             "transaction_amount >= 0",
             name="ck_reconciliation_transaction_amount_non_negative",
         ),
+        CheckConstraint(
+            "transaction_type IN ('DISBURSEMENT', 'REPAYMENT')",
+            name="ck_reconciliation_transaction_type",
+        ),
+        CheckConstraint(
+            "reconciliation_status IN ('PENDING', 'MATCHED', 'MISMATCH', 'CLOSED')",
+            name="ck_reconciliation_status",
+        ),
     )
 
     reconciliation_id: Mapped[str] = mapped_column(

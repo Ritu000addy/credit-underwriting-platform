@@ -4,8 +4,6 @@ from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.policy import (PolicyEvaluationResult, PolicyRuleResult)
 
-from backend.app.services.policy_config import POLICY_CONFIG, POLICY_METADATA
-
 class PolicyEngine:
 
     def calculate_age(self, dob: date) -> int:
@@ -28,7 +26,22 @@ class PolicyEngine:
         application: ApplicationCreate,
         borrower: Borrower360,
         foir=None,
+        policy_config: dict | None = None,
+        policy_metadata: dict | None = None,
     ) -> PolicyEvaluationResult:
+
+        if policy_config is None:
+            raise ValueError(
+                "GOVERNED_POLICY_CONFIG_REQUIRED"
+            )
+
+        if policy_metadata is None:
+            raise ValueError(
+                "GOVERNED_POLICY_METADATA_REQUIRED"
+            )
+
+        POLICY_CONFIG = policy_config
+        POLICY_METADATA = policy_metadata
     
         rules: list[PolicyRuleResult] = []
 
@@ -412,72 +425,115 @@ class PolicyEngine:
 
         # KYC / BANK ACCOUNT VALIDATION
 
+        kyc_config = POLICY_CONFIG["kyc_bank_validation"]
         kyc = borrower.kyc
-        if (
-            kyc.pan
-            and kyc.ekyc_result == "VERIFIED"
-        ):
-            rules.append(
-                PolicyRuleResult(
-                    rule_id="KYC_BANK_VALIDATION",
-                    status="PASS",
-                    reason="KYC validation passed",
-                )
-            )
-        else:
 
+        if kyc is None:
             rules.append(
                 PolicyRuleResult(
                     rule_id="KYC_BANK_VALIDATION",
-                    status="FAIL",
-                    reason="KYC validation requirements not satisfied",
+                    status="NOT_EVALUATED",
+                    reason="KYC information not available",
                 )
             )
+
+        else:
+            pan_valid = (
+                not kyc_config["pan_required"]
+                or bool(kyc.pan)
+            )
+
+            ekyc_valid = (
+                not kyc_config["ekyc_required"]
+                or kyc.ekyc_result
+                == kyc_config["required_ekyc_result"]
+            )
+
+            aadhaar_valid = (
+                not kyc_config["aadhaar_kyc_required"]
+                or kyc.aadhaar_kyc_status == "VERIFIED"
+            )
+
+            if pan_valid and ekyc_valid and aadhaar_valid:
+                rules.append(
+                    PolicyRuleResult(
+                        rule_id="KYC_BANK_VALIDATION",
+                        status="PASS",
+                        reason="KYC validation passed",
+                    )
+                )
+            else:
+                rules.append(
+                    PolicyRuleResult(
+                        rule_id="KYC_BANK_VALIDATION",
+                        status="FAIL",
+                        reason="KYC validation requirements not satisfied",
+                    )
+                )
 
         # LOAN AMOUNT / TENURE
 
         loan_config = POLICY_CONFIG["loan"]
 
-        amount_valid = (
-            application.requested_amount
-            >= loan_config["minimum_amount"]
-            and
-            application.requested_amount
-            <= loan_config["maximum_amount"]
+        minimum_amount = loan_config.get("minimum_amount")
+        maximum_amount = loan_config.get("maximum_amount")
+        minimum_tenure_months = loan_config.get(
+            "minimum_tenure_months"
+        )
+        maximum_tenure_months = loan_config.get(
+            "maximum_tenure_months"
         )
 
-        tenure_valid = (
-            application.loan_tenure_months
-            >= loan_config["minimum_tenure_months"]
-            and
-            application.loan_tenure_months
-            <= loan_config["maximum_tenure_months"]
-        )
-
-        if amount_valid and tenure_valid:
-
+        if any(
+            value is None
+            for value in (
+                minimum_amount,
+                maximum_amount,
+                minimum_tenure_months,
+                maximum_tenure_months,
+            )
+        ):
             rules.append(
                 PolicyRuleResult(
                     rule_id="LOAN_AMOUNT_TENURE",
-                    status="PASS",
-                    reason=(
-                        "Requested loan amount and tenure "
-                        "are within permitted limits"
-                    ),
+                    status="NOT_EVALUATED",
+                    reason="Loan amount or tenure policy parameters not configured",
                 )
             )
-
         else:
-            rules.append(
-                PolicyRuleResult(
-                    rule_id="LOAN_AMOUNT_TENURE",
-                    status="FAIL",
-                    reason=(
-                        "Requested loan amount or tenure "
-                        "is outside permitted limits"
-                    ),
-                )
+            amount_valid = (
+                minimum_amount
+                <= application.requested_amount
+                <= maximum_amount
             )
+
+            tenure_valid = (
+                minimum_tenure_months
+                <= application.loan_tenure_months
+                <= maximum_tenure_months
+            )
+
+            if amount_valid and tenure_valid:
+                rules.append(
+                    PolicyRuleResult(
+                        rule_id="LOAN_AMOUNT_TENURE",
+                        status="PASS",
+                        reason=("Requested loan amount and tenure "
+                            "are within permitted limits",
+                        ),
+                    )
+                )
+            else:
+                rules.append(
+                    PolicyRuleResult(
+                        rule_id="LOAN_AMOUNT_TENURE",
+                        status="FAIL",
+                        reason=("Requested loan amount or tenure"
+                         "is outside permitted limits"
+                        ),
+                    )
+                )
+
 
         # POLICY EXCEPTION
         

@@ -15,6 +15,17 @@ class ModelRegistry(Base):
             "roc_auc IS NULL OR (roc_auc >= 0 AND roc_auc <= 1)",
             name="ck_model_registry_roc_auc_range",
         ),
+        CheckConstraint(
+            "lifecycle_status IN "
+            "('REGISTERED', 'VALIDATION', 'APPROVED', 'ACTIVE', "
+            "'INACTIVE', 'ROLLED_BACK', 'REJECTED')",
+            name="ck_model_registry_lifecycle_status",
+        ),
+        CheckConstraint(
+            "validation_status IN "
+            "('NOT_VALIDATED', 'IN_PROGRESS', 'PASSED', 'FAILED')",
+            name="ck_model_registry_validation_status",
+        ),
     )
 
     model_registry_id: Mapped[str] = mapped_column(
@@ -62,6 +73,55 @@ class ModelRegistry(Base):
         nullable=False,
     )
 
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="REGISTERED",
+        server_default="REGISTERED",
+    )
+
+    validation_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="NOT_VALIDATED",
+        server_default="NOT_VALIDATED",
+    )
+
+    validation_date: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    validated_by: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    validation_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    approval_date: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
+    approved_by: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    rollback_of_version: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    governance_notes: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
     environment: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
@@ -75,5 +135,12 @@ class ModelRegistry(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
         nullable=False,
     )

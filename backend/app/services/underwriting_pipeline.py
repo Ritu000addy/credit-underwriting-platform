@@ -17,6 +17,8 @@ class UnderwritingPipeline:
         self,
         application: ApplicationCreate,
         borrower: Borrower360,
+        policy_config: dict,
+        policy_metadata: dict,
     ) -> UnderwritingResult:
 
         result = UnderwritingResult(
@@ -78,9 +80,11 @@ class UnderwritingPipeline:
         # Stage 7: Policy Evaluation
 
         result.policy = policy_engine.evaluate(
-            application,
-            borrower,
+            application=application,
+            borrower=borrower,
             foir=result.risk_assessment.foir,
+            policy_config=policy_config,
+            policy_metadata=policy_metadata,
         )
 
         result.decision = decision_orchestrator.decide(

@@ -49,6 +49,25 @@ class Collection(Base):
             "outstanding_amount <= due_amount",
             name="ck_collections_outstanding_amount_not_over_due",
         ),
+        CheckConstraint(
+            "status IN ('PENDING', 'PARTIAL', 'COLLECTED')",
+            name="ck_collections_status",
+        ),
+        CheckConstraint(
+            "status <> 'PENDING' "
+            "OR (collected_amount = 0 AND outstanding_amount = due_amount)",
+            name="ck_collections_pending_status_consistency",
+        ),
+        CheckConstraint(
+            "status <> 'COLLECTED' "
+            "OR outstanding_amount = 0",
+            name="ck_collections_collected_status_consistency",
+        ),
+        CheckConstraint(
+            "status <> 'PARTIAL' "
+            "OR outstanding_amount > 0",
+            name="ck_collections_partial_status_consistency",
+        ),
     )
 
     collection_id: Mapped[str] = mapped_column(

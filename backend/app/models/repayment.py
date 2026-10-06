@@ -33,6 +33,10 @@ class Repayment(Base):
             "interest_allocated IS NULL OR interest_allocated >= 0",
             name="ck_repayments_interest_allocated_non_negative",
         ),
+        CheckConstraint(
+            "status IN ('SUCCESS')",
+            name="ck_repayments_status",
+        ),
     )
 
     repayment_id: Mapped[str] = mapped_column(

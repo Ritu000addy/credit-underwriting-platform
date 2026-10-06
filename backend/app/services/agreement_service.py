@@ -38,6 +38,16 @@ class AgreementService:
         if sanction.sanction_status != "APPROVED":
             raise ValueError("SANCTION_NOT_APPROVED")
 
+        if agreement_status != "CREATED":
+            raise ValueError(
+                "INVALID_INITIAL_AGREEMENT_STATUS"
+            )
+
+        if esign_status != "NOT_STARTED":
+            raise ValueError(
+                "INVALID_INITIAL_ESIGN_STATUS"
+            )
+
         agreement = Agreement(
             agreement_id=agreement_id,
             application_id=application_id,
@@ -67,14 +77,15 @@ class AgreementService:
         esign_reference: str,
     ) -> Agreement:
 
-        if agreement.agreement_status in {"COMPLETED", "CANCELLED"}:
-            raise ValueError("AGREEMENT_NOT_ELIGIBLE_FOR_ESIGN")
+        if agreement.agreement_status != "CREATED":
+            raise ValueError(
+                "AGREEMENT_NOT_ELIGIBLE_FOR_ESIGN"
+            )
 
-        if agreement.esign_status == "INITIATED":
-            raise ValueError("ESIGN_ALREADY_INITIATED")
-
-        if agreement.esign_status == "SIGNED":
-            raise ValueError("ESIGN_ALREADY_COMPLETED")
+        if agreement.esign_status != "NOT_STARTED":
+            raise ValueError(
+                "ESIGN_NOT_ELIGIBLE_FOR_INITIATION"
+            )
 
         agreement.esign_provider = esign_provider
         agreement.esign_reference = esign_reference

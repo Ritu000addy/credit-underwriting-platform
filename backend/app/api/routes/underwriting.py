@@ -1,6 +1,7 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from backend.app.database import get_db
 from backend.app.schemas.application import ApplicationCreate
@@ -19,8 +20,10 @@ from backend.app.services.decision_trace_service import (
 from backend.app.services.review_exception_service import (
     review_exception_service,
 )
+from backend.app.services.policy_version_service import policy_version_service
 
 from backend.app.models.loan_application import LoanApplication
+from backend.app.models.customer import Customer
 
 
 router = APIRouter(
@@ -38,9 +41,57 @@ def evaluate_application(
     borrower: Borrower360,
     db: Session = Depends(get_db),
 ):
+
+    application_record = db.get(
+        LoanApplication,
+        application.application_id,
+    )
+
+    if application_record is None:
+        raise HTTPException(
+            status_code=404,
+            detail="APPLICATION_NOT_FOUND",
+        )
+
+    customer = db.get(
+        Customer,
+        application.customer_id,
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=404,
+            detail="CUSTOMER_NOT_FOUND",
+        )
+
+    if application.customer_id != application_record.customer_id:
+        raise HTTPException(
+            status_code=400,
+            detail="APPLICATION_CUSTOMER_MISMATCH",
+        )
+
+    if borrower.customer_id != application.customer_id:
+        raise HTTPException(
+            status_code=400,
+            detail="BORROWER_CUSTOMER_MISMATCH",
+        )
+
+    try:
+        policy_context = policy_version_service.get_policy_context(
+            db=db,
+            as_of=datetime.utcnow(),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
     result = underwriting_pipeline.process(
         application=application,
         borrower=borrower,
+        policy_config=policy_context["policy_config"],
+        policy_metadata=policy_context["policy_metadata"],
     )
 
     if result.decision is not None:
@@ -217,7 +268,7 @@ def evaluate_application(
             actor_type="SYSTEM",
             action="UNDERWRITING_DECISION",
             entity_type="CREDIT_DECISION",
-            entity_reference=result.decision.decision_id,
+            entity_reference=saved_decision.decision_id,
             description=(
                 f"AI underwriting decision generated: "
                 f"{result.decision.decision}"

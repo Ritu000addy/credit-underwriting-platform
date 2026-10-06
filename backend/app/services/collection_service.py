@@ -31,6 +31,15 @@ class CollectionService:
         collected_at: datetime | None = None,
     ) -> Collection:
 
+        if status not in {
+            "PENDING",
+            "PARTIAL",
+            "COLLECTED"
+        }:
+            raise ValueError(
+                "INVALID_INITIAL_COLLECTION_STATUS"
+            )
+
         if due_amount < Decimal("0.00"):
             raise ValueError("INVALID_DUE_AMOUNT")
 
@@ -202,6 +211,7 @@ class CollectionService:
             repayment_reference=collection_reference,
             payment_mode=payment_mode,
             payment_provider=payment_provider,
+            commit_transaction=False,
         )
 
         total_collected = (

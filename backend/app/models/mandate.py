@@ -20,7 +20,7 @@ class Mandate(Base):
         "created_at",
     ),
     CheckConstraint(
-        "status IN ('INITIATED', 'COMPLETED', 'FAILED')",
+        "status IN ('CREATED','INITIATED', 'COMPLETED', 'FAILED')",
         name="ck_mandates_status",
     ),
 )

@@ -37,6 +37,11 @@ class MandateService:
         if agreement is None:
             raise ValueError("AGREEMENT_NOT_COMPLETED")
 
+        if status != "CREATED":
+            raise ValueError(
+                "INVALID_INITIAL_MANDATE_STATUS"
+            )
+
         existing_mandate = (
             db.query(Mandate)
             .filter(Mandate.application_id == application_id)
@@ -69,14 +74,10 @@ class MandateService:
         mandate: Mandate,
     ) -> Mandate:
 
-        if mandate.status == "INITIATED":
-            raise ValueError("MANDATE_ALREADY_INITIATED")
-
-        if mandate.status == "COMPLETED":
-            raise ValueError("MANDATE_ALREADY_COMPLETED")
-
-        if mandate.status == "FAILED":
-            raise ValueError("MANDATE_NOT_ELIGIBLE_FOR_REINITIATION")
+        if mandate.status != "CREATED":
+            raise ValueError(
+                f"MANDATE_NOT_ELIGIBLE_FOR_INITIATION:{mandate.status}"
+            )
 
         mandate.status = "INITIATED"
         mandate.initiated_at = datetime.utcnow()

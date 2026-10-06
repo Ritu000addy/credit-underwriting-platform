@@ -92,7 +92,14 @@ class ReconciliationService:
         bank_amount: Decimal | None,
     ) -> ReconciliationMatchResult:
 
-        disbursement = db.get(Disbursement, disbursement_id)
+        disbursement = (
+            db.query(Disbursement)
+            .filter(
+                Disbursement.disbursement_id == disbursement_id
+            )
+            .with_for_update()
+            .first()
+        )
 
         if disbursement is None:
             return ReconciliationMatchResult(
@@ -209,6 +216,7 @@ class ReconciliationService:
                 if result.status == "MATCHED"
                 else None
             ),
+            commit_transaction=False,
         )
 
         if result.status == "MISMATCH":
@@ -218,6 +226,7 @@ class ReconciliationService:
                 disbursement_id=disbursement.disbursement_id,
                 queue_type="RECONCILIATION_MISMATCH",
                 reason=result.mismatch_reason,
+                commit_transaction=False,
             )
 
         audit_log_service.log(
@@ -241,6 +250,8 @@ class ReconciliationService:
             new_state=result.status,
             request_reference=disbursement.disbursement_id,
         )
+
+        db.commit()
 
         return result
 
@@ -297,6 +308,7 @@ class ReconciliationService:
         disbursement_id: str | None,
         queue_type: str,
         reason: str | None = None,
+        commit_transaction: bool = True,
     ) -> OperationsQueue:
 
         queue_item = OperationsQueue(
@@ -309,8 +321,11 @@ class ReconciliationService:
         )
 
         db.add(queue_item)
-        db.commit()
-        db.refresh(queue_item)
+        db.flush()
+
+        if commit_transaction:
+            db.commit()
+            db.refresh(queue_item)
 
         return queue_item
 
@@ -331,23 +346,33 @@ class ReconciliationService:
 
         previous_status = queue_item.queue_status
 
-        allowed_statuses = {
+        allowed_transitions = {
+            "OPEN": {"IN_PROGRESS"},
+            "IN_PROGRESS": {"RESOLVED"},
+            "RESOLVED": set(),
+        }
+
+        current_status = queue_item.queue_status
+
+        if current_status not in allowed_transitions:
+            raise ValueError(
+                f"INVALID_OPERATIONS_QUEUE_STATE:{current_status}"
+            )
+
+        if queue_status not in {
             "OPEN",
             "IN_PROGRESS",
             "RESOLVED",
-        }
+        }:
+            raise ValueError(
+                "INVALID_OPERATIONS_QUEUE_STATUS"
+            )
 
-        if queue_status not in allowed_statuses:
-            raise ValueError("INVALID_OPERATIONS_QUEUE_STATUS")
-
-        if queue_item.queue_status == "RESOLVED":
-            raise ValueError("OPERATIONS_QUEUE_ALREADY_RESOLVED")
-
-        if (
-            queue_item.queue_status == "OPEN"
-            and queue_status == "RESOLVED"
-        ):
-            raise ValueError("OPERATIONS_QUEUE_MUST_BE_IN_PROGRESS")
+        if queue_status not in allowed_transitions[current_status]:
+            raise ValueError(
+                f"OPERATIONS_QUEUE_INVALID_TRANSITION:"
+                f"{current_status}->{queue_status}"
+            )
 
         queue_item.queue_status = queue_status
 
@@ -388,7 +413,38 @@ class ReconciliationService:
         transaction_date: datetime | None = None,
         mismatch_reason: str | None = None,
         reconciled_at: datetime | None = None,
+        commit_transaction: bool = True,
     ) -> Reconciliation:
+
+        if transaction_type not in {
+            "DISBURSEMENT",
+            "REPAYMENT",
+        }:
+            raise ValueError(
+                "INVALID_RECONCILIATION_TRANSACTION_TYPE"
+            )
+
+        if reconciliation_status not in {
+            "PENDING",
+            "MATCHED",
+            "MISMATCH",
+            "CLOSED",
+        }:
+            raise ValueError(
+                "INVALID_RECONCILIATION_STATUS"
+            )
+
+        if reconciliation_status == "CLOSED":
+            if reconciled_at is None:
+                raise ValueError(
+                    "CLOSED_RECONCILIATION_REQUIRES_RECONCILED_AT"
+                )
+
+        if reconciliation_status == "MATCHED":
+            if reconciled_at is None:
+                raise ValueError(
+                    "MATCHED_RECONCILIATION_REQUIRES_RECONCILED_AT"
+                )
 
         reconciliation = Reconciliation(
             reconciliation_id=reconciliation_id,
@@ -405,8 +461,11 @@ class ReconciliationService:
         )
 
         db.add(reconciliation)
-        db.commit()
-        db.refresh(reconciliation)
+        db.flush()
+
+        if commit_transaction:
+            db.commit()
+            db.refresh(reconciliation)
 
         return reconciliation
 

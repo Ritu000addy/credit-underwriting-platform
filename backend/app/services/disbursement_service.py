@@ -30,6 +30,11 @@ class DisbursementService:
         processed_at=None,
     ) -> Disbursement:
 
+        if status != "CREATED":
+            raise ValueError(
+                "INVALID_INITIAL_DISBURSEMENT_STATUS"
+            )
+
         if idempotency_key:
             existing_disbursement = (
                 db.query(Disbursement)
@@ -183,11 +188,10 @@ class DisbursementService:
 
         previous_status = disbursement.status
 
-        if disbursement.status not in {
-            "INITIATED",
-            "PROCESSING",
-        }:
-            raise ValueError("DISBURSEMENT_NOT_ELIGIBLE_FOR_PROCESSING")
+        if disbursement.status != "PROCESSING":
+            raise ValueError(
+                "DISBURSEMENT_NOT_READY_FOR_PROCESSING"
+            )
 
         disbursement.status = "PROCESSED"
         disbursement.bank_reference = bank_reference

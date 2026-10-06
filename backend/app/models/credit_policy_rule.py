@@ -1,14 +1,29 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Numeric, String, Text, CheckConstraint, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
 
+from sqlalchemy.dialects.postgresql import JSONB
 
 class CreditPolicyRule(Base):
     __tablename__ = "credit_policy_rules"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "policy_version",
+            "rule_code",
+            name="uq_credit_policy_rule_policy_version_rule_code",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL "
+            "OR effective_from IS NULL "
+            "OR effective_to >= effective_from",
+            name="ck_credit_policy_rule_effective_dates",
+        ),
+    )
 
     rule_id: Mapped[str] = mapped_column(
         String(50),
@@ -50,6 +65,11 @@ class CreditPolicyRule(Base):
         nullable=True,
     )
 
+    rule_parameters: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
@@ -58,6 +78,7 @@ class CreditPolicyRule(Base):
 
     policy_version: Mapped[str] = mapped_column(
         String(100),
+        ForeignKey("policy_versions.policy_version"),
         nullable=False,
     )
 

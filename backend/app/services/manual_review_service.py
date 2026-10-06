@@ -161,7 +161,7 @@ class ManualReviewService:
 
         allowed_transitions = {
             "OPEN": {"IN_PROGRESS"},
-            "IN_PROGRESS": set(),
+            "IN_PROGRESS": {"PENDING_CHECKER"},
             "PENDING_CHECKER": {"COMPLETED"},
             "COMPLETED": set(),
         }

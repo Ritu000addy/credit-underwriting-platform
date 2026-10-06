@@ -28,6 +28,11 @@ class RepaymentService:
         paid_at: datetime | None = None,
     ) -> Repayment:
 
+        if status != "SUCCESS":
+            raise ValueError(
+                "INVALID_INITIAL_REPAYMENT_STATUS"
+            )
+
         repayment = Repayment(
             repayment_id=repayment_id,
             application_id=application_id,
@@ -59,6 +64,7 @@ class RepaymentService:
         repayment_reference: str | None = None,
         payment_mode: str | None = None,
         payment_provider: str | None = None,
+        commit_transaction: bool = True,
     ) -> Repayment:
 
         schedule = (
@@ -67,6 +73,7 @@ class RepaymentService:
                 RepaymentSchedule.repayment_schedule_id
                 == repayment_schedule_id
             )
+            .with_for_update()
             .first()
         )
 
@@ -155,8 +162,11 @@ class RepaymentService:
             new_state=schedule.status,
             request_reference=repayment_reference,
         )
-        db.commit()
-        db.refresh(repayment)
+        db.flush()
+
+        if commit_transaction:
+            db.commit()
+            db.refresh(repayment)
 
         return repayment
 
