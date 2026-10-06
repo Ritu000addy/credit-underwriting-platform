@@ -1,6 +1,6 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class CustomerCreate(BaseModel):
@@ -14,6 +14,7 @@ class CustomerCreate(BaseModel):
 
 
 class CustomerResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     customer_id: str
     kyc_status: str | None = None
     pan: str | None = None

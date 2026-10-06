@@ -1,5 +1,6 @@
 from decimal import Decimal
-
+from datetime import datetime
+from pydantic import ConfigDict
 from pydantic import BaseModel
 
 
@@ -13,3 +14,9 @@ class BureauReportCreate(BaseModel):
     write_offs: Decimal | None = None
     enquiries: int | None = None
     report_reference: str | None = None
+
+class BureauReportResponse(BureauReportCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    bureau_report_id: str
+    fetched_at: datetime

@@ -1,6 +1,4 @@
 import logging
-import uuid
-from datetime import datetime, timezone
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -8,65 +6,31 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from backend.app.core.request_context import (
+    get_request_id,
+)
+from backend.app.core.responses import (
+    error_response,
+)
+
 
 logger = logging.getLogger(__name__)
-
-
-def get_request_id(request: Request) -> str:
-    request_id = getattr(
-        request.state,
-        "request_id",
-        None,
-    )
-
-    if request_id:
-        return request_id
-
-    request_id = (
-        f"REQ-{uuid.uuid4().hex[:12].upper()}"
-    )
-
-    request.state.request_id = request_id
-
-    return request_id
-
-
-def build_error_response(
-    *,
-    request: Request,
-    status_code: int,
-    code: str,
-    message: str,
-    details=None,
-):
-    return JSONResponse(
-        status_code=status_code,
-        content={
-            "detail": message,
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-            },
-            "request_id": get_request_id(request),
-            "path": request.url.path,
-            "timestamp": datetime.now(
-                timezone.utc
-            ).isoformat(),
-        },
-    )
 
 
 async def request_validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ):
-    return build_error_response(
+    response = error_response(
         request=request,
-        status_code=422,
         code="REQUEST_VALIDATION_ERROR",
         message="Request validation failed.",
         details=exc.errors(),
+    )
+
+    return JSONResponse(
+        status_code=422,
+        content=response.model_dump(mode="json"),
     )
 
 
@@ -81,12 +45,16 @@ async def http_exception_handler(
         message = "Request failed."
         details = exc.detail
 
-    return build_error_response(
+    response = error_response(
         request=request,
-        status_code=exc.status_code,
         code="HTTP_ERROR",
         message=message,
         details=details,
+    )
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=response.model_dump(mode="json"),
     )
 
 
@@ -100,12 +68,16 @@ async def integrity_error_handler(
         exc_info=exc,
     )
 
-    return build_error_response(
+    response = error_response(
         request=request,
-        status_code=409,
         code="DATABASE_CONSTRAINT_VIOLATION",
         message="Database integrity constraint violated.",
         details=None,
+    )
+
+    return JSONResponse(
+        status_code=409,
+        content=response.model_dump(mode="json"),
     )
 
 
@@ -119,10 +91,14 @@ async def unhandled_exception_handler(
         exc_info=exc,
     )
 
-    return build_error_response(
+    response = error_response(
         request=request,
-        status_code=500,
         code="INTERNAL_SERVER_ERROR",
         message="An unexpected internal error occurred.",
         details=None,
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content=response.model_dump(mode="json"),
     )

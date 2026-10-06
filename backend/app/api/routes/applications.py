@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
 from backend.app.database import get_db
 
-from backend.app.schemas.application import ApplicationCreate
+from backend.app.schemas.application import ApplicationCreate, ApplicationResponse
+from backend.app.schemas.common import ApiResponse
 from backend.app.services.application_service import application_service
 
 router = APIRouter(
@@ -11,9 +13,13 @@ router = APIRouter(
     tags=["LOS Origination"],
 )
 
-@router.post("")
+@router.post(
+    "",
+    response_model=ApiResponse[ApplicationResponse])
+
 def create_application(
     application: ApplicationCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -22,15 +28,16 @@ def create_application(
             application=application,
         )
 
-        return {
-            "message": "Application created successfully",
-            "application": {
-                "application_id": result.application_id,
-                "customer_id": result.customer_id,
-                "requested_amount": result.requested_amount,
-                "status": result.status,
-            },
-        }
+        response_data = ApplicationResponse.model_validate(
+            result
+        )
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Application created successfully.",
+        )
+
     except ValueError as exc:
         raise HTTPException(
             status_code=409,
@@ -38,9 +45,13 @@ def create_application(
         )
 
 
-@router.get("/{application_id}")
+@router.get(
+    "/{application_id}",
+    response_model=ApiResponse[ApplicationResponse],
+)
 def get_application(
     application_id: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     result = application_service.get_application(
@@ -54,12 +65,12 @@ def get_application(
             detail="Application not found",
         )
 
-    return {
-        "application_id": result.application_id,
-        "customer_id": result.customer_id,
-        "product": result.product,
-        "requested_amount": result.requested_amount,
-        "status": result.status,
-        "created_at": result.created_at,
-        "updated_at": result.updated_at,
-    }
+    response_data = ApplicationResponse.model_validate(
+        result
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Application retrieved successfully.",
+    )

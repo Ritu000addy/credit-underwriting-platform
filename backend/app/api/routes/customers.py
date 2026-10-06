@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -6,6 +6,10 @@ from backend.app.schemas.customer import (
     CustomerCreate,
     CustomerResponse,
 )
+
+from backend.app.core.responses import success_response
+from backend.app.schemas.common import ApiResponse
+
 from backend.app.services.customer_service import customer_service
 
 
@@ -17,10 +21,11 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=CustomerResponse,
+    response_model=ApiResponse[CustomerResponse],
 )
 def create_customer(
     customer: CustomerCreate,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     try:
@@ -41,4 +46,10 @@ def create_customer(
             detail=str(exc),
         )
 
-    return result
+    response_data = CustomerResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Customer created successfully.",
+    )

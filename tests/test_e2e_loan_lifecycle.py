@@ -254,7 +254,7 @@ def test_end_to_end_origination_to_manual_review():
         "Borrower 360 aggregation",
     )
 
-    borrower360_payload = borrower360_response.json()
+    borrower360_payload = borrower360_response.json()["data"]
 
     assert borrower360_payload["customer_id"] == customer_id
     assert borrower360_payload["kyc"] is not None
