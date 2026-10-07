@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+import json
 
 
 revision: str = "a1b2c3d4e5f6"
@@ -156,7 +157,9 @@ def upgrade() -> None:
                 "threshold_value": rule.threshold_value,
                 "threshold_text": rule.threshold_text,
                 "action": rule.action,
-                "rule_parameters": rule.rule_parameters,
+                "rule_parameters": json.dumps(rule.rule_parameters)
+                    if rule.rule_parameters is not None
+                    else None,
                 "policy_version": TARGET_POLICY_VERSION,
                 "effective_from": TARGET_EFFECTIVE_FROM,
                 "created_at": datetime.utcnow(),
