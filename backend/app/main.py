@@ -128,7 +128,7 @@ from backend.app.api.routes.audit import router as audit_router
 # ============================================================
 
 from backend.app.api.routes.post_disbursement import (
-    router as post_disbursement_router,
+    router as reconciliation_router,
 )
 
 # ============================================================
@@ -225,7 +225,7 @@ openapi_tags = [
     },
     {
         "name": "Reconciliation",
-        "description": "Post-disbursement reconciliation and reconciliation operations.",
+        "description": "Reconciliation checks and reconciliation operations.",
     },
     {
         "name": "LMS Integration",
@@ -369,7 +369,6 @@ app.include_router(genai_underwriting_router)
 
 # 7. Manual Review
 app.include_router(manual_review_router)
-app.include_router(review_exception_router)
 
 # 8. Review Exceptions
 app.include_router(review_exception_router)
@@ -399,7 +398,7 @@ app.include_router(repayments_router)
 app.include_router(collections_router)
 
 # 17. Reconciliation
-app.include_router(post_disbursement_router)
+app.include_router(reconciliation_router)
 
 # 18. LMS Integration
 app.include_router(lms_router)

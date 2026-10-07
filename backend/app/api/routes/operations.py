@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from typing import Any
 
 from backend.app.core.responses import success_response
 from backend.app.database import get_db
@@ -17,6 +18,9 @@ from backend.app.schemas.operations import (
 from backend.app.services.operations_service import (
     operations_service,
 )
+from backend.app.services.reconciliation_service import (
+    reconciliation_service,
+)
 
 
 router = APIRouter(
@@ -24,6 +28,61 @@ router = APIRouter(
     tags=["Credit Operations"],
 )
 
+@router.post(
+    "/queue",
+    response_model=ApiResponse[dict[str, Any]],
+)
+def update_operations_queue_status(
+    queue_id: str,
+    queue_status: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = reconciliation_service.update_operations_queue_status(
+            db=db,
+            queue_id=queue_id,
+            queue_status=queue_status,
+        )
+
+    except ValueError as exc:
+        if str(exc) == "OPERATIONS_QUEUE_NOT_FOUND":
+            raise HTTPException(
+                status_code=404,
+                detail="Operations queue item not found",
+            )
+
+        if str(exc) == "INVALID_OPERATIONS_QUEUE_STATUS":
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid operations queue status",
+            )
+
+        if str(exc) == "OPERATIONS_QUEUE_ALREADY_RESOLVED":
+            raise HTTPException(
+                status_code=400,
+                detail="Operations queue item is already resolved",
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    response_data = {
+        "queue_id": result.queue_id,
+        "reconciliation_id": result.reconciliation_id,
+        "disbursement_id": result.disbursement_id,
+        "queue_type": result.queue_type,
+        "queue_status": result.queue_status,
+        "reason": result.reason,
+    }
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Operations queue status updated successfully.",
+    )
 
 @router.get(
     "/dashboard",

@@ -87,60 +87,6 @@ def create_policy_version(
         )
 
 
-@router.get(
-    "",
-    response_model=ApiResponse[list[PolicyVersionResponse]],
-)
-def list_policy_versions(
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    result = policy_version_service.list_policy_versions(
-        db=db,
-    )
-
-    response_data = [
-        PolicyVersionResponse.model_validate(item)
-        for item in result
-    ]
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Policy versions retrieved successfully.",
-    )
-
-
-@router.get(
-    "/{policy_version}",
-    response_model=ApiResponse[PolicyVersionResponse],
-)
-def get_policy_version(
-    policy_version: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        result = policy_version_service.get_policy_version(
-            db=db,
-            policy_version=policy_version,
-        )
-
-        response_data = PolicyVersionResponse.model_validate(result)
-
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version retrieved successfully.",
-        )
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail=str(exc),
-        )
-
-
 @router.post(
     "/activate",
     response_model=ApiResponse[PolicyVersionResponse],
@@ -290,6 +236,65 @@ def deactivate_policy_version(
 
 
 @router.post(
+    "/rollback",
+    response_model=ApiResponse[PolicyVersionResponse],
+)
+def rollback_policy_version(
+    request: PolicyVersionRollback,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = policy_version_service.rollback_policy(
+            db=db,
+            target_policy_version=request.target_policy_version,
+        )
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=None,
+            actor_type="USER",
+            actor_reference=request.actor_id,
+            action="POLICY_VERSION_ROLLBACK",
+            entity_type="POLICY_VERSION",
+            entity_reference=result.policy_version,
+            description=(
+                f"Policy rollback completed. "
+                f"Active policy version: {result.policy_version}."
+            ),
+            previous_state="ACTIVE",
+            new_state=result.status,
+            request_reference=result.policy_version,
+            policy_version=result.policy_version,
+        )
+
+        db.commit()
+        db.refresh(result)
+
+        response_data = PolicyVersionResponse.model_validate(result)
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Policy version rollback completed successfully.",
+        )
+
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        )
+
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="POLICY_VERSION_ROLLBACK_FAILED",
+        )
+
+@router.post(
     "/retire",
     response_model=ApiResponse[PolicyVersionResponse],
 )
@@ -362,62 +367,55 @@ def retire_policy_version(
             detail="POLICY_VERSION_RETIREMENT_FAILED",
         )
 
+@router.get(
+    "",
+    response_model=ApiResponse[list[PolicyVersionResponse]],
+)
+def list_policy_versions(
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    result = policy_version_service.list_policy_versions(
+        db=db,
+    )
 
-@router.post(
-    "/rollback",
+    response_data = [
+        PolicyVersionResponse.model_validate(item)
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy versions retrieved successfully.",
+    )
+
+
+@router.get(
+    "/{policy_version}",
     response_model=ApiResponse[PolicyVersionResponse],
 )
-def rollback_policy_version(
-    request: PolicyVersionRollback,
+def get_policy_version(
+    policy_version: str,
     api_request: Request,
     db: Session = Depends(get_db),
 ):
     try:
-        result = policy_version_service.rollback_policy(
+        result = policy_version_service.get_policy_version(
             db=db,
-            target_policy_version=request.target_policy_version,
+            policy_version=policy_version,
         )
-
-        audit_log_service.log(
-            db=db,
-            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
-            application_id=None,
-            actor_type="USER",
-            actor_reference=request.actor_id,
-            action="POLICY_VERSION_ROLLBACK",
-            entity_type="POLICY_VERSION",
-            entity_reference=result.policy_version,
-            description=(
-                f"Policy rollback completed. "
-                f"Active policy version: {result.policy_version}."
-            ),
-            previous_state="ACTIVE",
-            new_state=result.status,
-            request_reference=result.policy_version,
-            policy_version=result.policy_version,
-        )
-
-        db.commit()
-        db.refresh(result)
 
         response_data = PolicyVersionResponse.model_validate(result)
 
         return success_response(
             request=api_request,
             data=response_data,
-            message="Policy version rollback completed successfully.",
+            message="Policy version retrieved successfully.",
         )
 
     except ValueError as exc:
-        db.rollback()
         raise HTTPException(
-            status_code=409,
+            status_code=404,
             detail=str(exc),
-        )
-
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="POLICY_VERSION_ROLLBACK_FAILED",
         )

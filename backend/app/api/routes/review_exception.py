@@ -89,68 +89,6 @@ def create_review_exception(
             detail="REVIEW_EXCEPTION_CREATION_FAILED",
         )
 
-
-@router.get(
-    "/{exception_id}",
-    response_model=ApiResponse[ReviewExceptionResponse],
-)
-def get_review_exception(
-    exception_id: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    result = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
-    )
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Review exception not found.",
-        )
-
-    response_data = ReviewExceptionResponse.model_validate(
-        result,
-        from_attributes=True,
-    )
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Review exception retrieved successfully.",
-    )
-
-
-@router.get(
-    "/application/{application_id}",
-    response_model=ApiResponse[list[ReviewExceptionResponse]],
-)
-def get_application_exceptions(
-    application_id: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    result = review_exception_service.get_by_application(
-        db=db,
-        application_id=application_id,
-    )
-
-    response_data = [
-        ReviewExceptionResponse.model_validate(
-            item,
-            from_attributes=True,
-        )
-        for item in result
-    ]
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Application review exceptions retrieved successfully.",
-    )
-
-
 @router.post(
     "/{exception_id}/assign",
     response_model=ApiResponse[ReviewExceptionResponse],
@@ -533,3 +471,64 @@ def close_review_exception(
             status_code=500,
             detail="REVIEW_EXCEPTION_CLOSURE_FAILED",
         )
+
+
+@router.get(
+    "/application/{application_id}",
+    response_model=ApiResponse[list[ReviewExceptionResponse]],
+)
+def get_application_exceptions(
+    application_id: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    result = review_exception_service.get_by_application(
+        db=db,
+        application_id=application_id,
+    )
+
+    response_data = [
+        ReviewExceptionResponse.model_validate(
+            item,
+            from_attributes=True,
+        )
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Application review exceptions retrieved successfully.",
+    )
+    
+
+@router.get(
+    "/{exception_id}",
+    response_model=ApiResponse[ReviewExceptionResponse],
+)
+def get_review_exception(
+    exception_id: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    result = review_exception_service.get_exception(
+        db=db,
+        exception_id=exception_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Review exception not found.",
+        )
+
+    response_data = ReviewExceptionResponse.model_validate(
+        result,
+        from_attributes=True,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception retrieved successfully.",
+    )

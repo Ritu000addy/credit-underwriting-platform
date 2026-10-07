@@ -97,95 +97,6 @@ def register_model(
             detail="MODEL_REGISTRATION_FAILED",
         )
 
-
-@router.get(
-    "/{model_name}/versions",
-    response_model=ApiResponse[list[ModelRegistryResponse]],
-)
-def list_model_versions(
-    model_name: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    result = model_registry_service.list_versions(
-        db=db,
-        model_name=model_name,
-    )
-
-    response_data = [
-        ModelRegistryResponse.model_validate(item)
-        for item in result
-    ]
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Model versions retrieved successfully.",
-    )
-
-
-@router.get(
-    "/{model_name}/active",
-    response_model=ApiResponse[ModelRegistryResponse],
-)
-def get_active_model(
-    model_name: str,
-    api_request: Request,
-    environment: str | None = None,
-    db: Session = Depends(get_db),
-):
-    result = model_registry_service.get_active_model(
-        db=db,
-        model_name=model_name,
-        environment=environment,
-    )
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail="ACTIVE_MODEL_NOT_FOUND",
-        )
-
-    response_data = ModelRegistryResponse.model_validate(result)
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Active model retrieved successfully.",
-    )
-
-
-@router.get(
-    "/{model_name}/{model_version}",
-    response_model=ApiResponse[ModelRegistryResponse],
-)
-def get_model(
-    model_name: str,
-    model_version: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    result = model_registry_service.get_model(
-        db=db,
-        model_name=model_name,
-        model_version=model_version,
-    )
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail="MODEL_NOT_FOUND",
-        )
-
-    response_data = ModelRegistryResponse.model_validate(result)
-
-    return success_response(
-        request=api_request,
-        data=response_data,
-        message="Model retrieved successfully.",
-    )
-
-
 @router.post(
     "/validation/start",
     response_model=ApiResponse[ModelRegistryResponse],
@@ -633,3 +544,91 @@ def rollback_model(
             status_code=500,
             detail="MODEL_ROLLBACK_FAILED",
         )
+
+
+@router.get(
+    "/{model_name}/versions",
+    response_model=ApiResponse[list[ModelRegistryResponse]],
+)
+def list_model_versions(
+    model_name: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    result = model_registry_service.list_versions(
+        db=db,
+        model_name=model_name,
+    )
+
+    response_data = [
+        ModelRegistryResponse.model_validate(item)
+        for item in result
+    ]
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model versions retrieved successfully.",
+    )
+
+
+@router.get(
+    "/{model_name}/active",
+    response_model=ApiResponse[ModelRegistryResponse],
+)
+def get_active_model(
+    model_name: str,
+    api_request: Request,
+    environment: str | None = None,
+    db: Session = Depends(get_db),
+):
+    result = model_registry_service.get_active_model(
+        db=db,
+        model_name=model_name,
+        environment=environment,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="ACTIVE_MODEL_NOT_FOUND",
+        )
+
+    response_data = ModelRegistryResponse.model_validate(result)
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Active model retrieved successfully.",
+    )
+
+
+@router.get(
+    "/{model_name}/{model_version}",
+    response_model=ApiResponse[ModelRegistryResponse],
+)
+def get_model(
+    model_name: str,
+    model_version: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    result = model_registry_service.get_model(
+        db=db,
+        model_name=model_name,
+        model_version=model_version,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="MODEL_NOT_FOUND",
+        )
+
+    response_data = ModelRegistryResponse.model_validate(result)
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model retrieved successfully.",
+    )

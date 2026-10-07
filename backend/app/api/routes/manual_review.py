@@ -83,72 +83,6 @@ def create_manual_review(
         )
 
 
-@router.get(
-    "/{application_id}",
-    response_model=ApiResponse[ManualReviewResponse],
-)
-def get_manual_review(
-    application_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    result = manual_review_service.get_review(
-        db=db,
-        application_id=application_id,
-    )
-
-    if result is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Manual review not found.",
-        )
-
-    response_data = ManualReviewResponse.model_validate(result)
-
-    return success_response(
-        request=request,
-        data=response_data,
-        message="Manual review retrieved successfully.",
-    )
-
-
-@router.get(
-    "/{application_id}/history",
-    response_model=ApiResponse[list[ManualReviewHistoryResponse]],
-)
-def get_manual_review_history(
-    application_id: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    review = manual_review_service.get_review(
-        db=db,
-        application_id=application_id,
-    )
-
-    if review is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Manual review not found.",
-        )
-
-    result = manual_review_history_service.get_by_review(
-        db=db,
-        review_id=review.review_id,
-    )
-
-    response_data = [
-        ManualReviewHistoryResponse.model_validate(item)
-        for item in result
-    ]
-
-    return success_response(
-        request=request,
-        data=response_data,
-        message="Manual review history retrieved successfully.",
-    )
-
-
 @router.post(
     "/{application_id}/start",
     response_model=ApiResponse[ManualReviewResponse],
@@ -477,3 +411,69 @@ def submit_manual_review_checker_decision(
             status_code=500,
             detail="MANUAL_REVIEW_CHECKER_DECISION_FAILED",
         )
+
+
+@router.get(
+    "/{application_id}",
+    response_model=ApiResponse[ManualReviewResponse],
+)
+def get_manual_review(
+    application_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    result = manual_review_service.get_review(
+        db=db,
+        application_id=application_id,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Manual review not found.",
+        )
+
+    response_data = ManualReviewResponse.model_validate(result)
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Manual review retrieved successfully.",
+    )
+
+
+@router.get(
+    "/{application_id}/history",
+    response_model=ApiResponse[list[ManualReviewHistoryResponse]],
+)
+def get_manual_review_history(
+    application_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    review = manual_review_service.get_review(
+        db=db,
+        application_id=application_id,
+    )
+
+    if review is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Manual review not found.",
+        )
+
+    result = manual_review_history_service.get_by_review(
+        db=db,
+        review_id=review.review_id,
+    )
+
+    response_data = [
+        ManualReviewHistoryResponse.model_validate(item)
+        for item in result
+    ]
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Manual review history retrieved successfully.",
+    )

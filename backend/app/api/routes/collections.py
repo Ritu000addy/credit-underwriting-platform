@@ -118,7 +118,6 @@ def record_collection(
             detail=str(exc),
         )
 
-
 # ============================================================
 # Get Overdue Schedules
 # IMPORTANT: keep before /{application_id}
@@ -146,7 +145,6 @@ def get_overdue_schedules(
         data=result,
         message="Overdue schedules retrieved successfully.",
     )
-
 
 # ============================================================
 # Get Collections by Application
@@ -176,85 +174,6 @@ def get_collections_by_application(
             request=api_request,
             data=response_data,
             message="Application collections retrieved successfully.",
-        )
-
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-
-# ============================================================
-# Get Collections by Repayment Schedule
-# ============================================================
-
-@router.get(
-    "/{application_id}/{repayment_schedule_id}",
-    response_model=ApiResponse[list[CollectionResponse]],
-)
-def get_collections_by_schedule(
-    application_id: str,
-    repayment_schedule_id: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        result = collection_service.get_collections_by_schedule(
-            db=db,
-            application_id=application_id,
-            repayment_schedule_id=repayment_schedule_id,
-        )
-
-        response_data = [
-            CollectionResponse.model_validate(item)
-            for item in result
-        ]
-
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Schedule collections retrieved successfully.",
-        )
-
-    except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-
-# ============================================================
-# Get Collection Summary
-# ============================================================
-
-@router.get(
-    "/{application_id}/{repayment_schedule_id}/summary",
-    response_model=ApiResponse[CollectionSummaryResponse],
-)
-def get_collection_summary(
-    application_id: str,
-    repayment_schedule_id: str,
-    api_request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        result = collection_service.get_collection_summary(
-            db=db,
-            application_id=application_id,
-            repayment_schedule_id=repayment_schedule_id,
-        )
-
-        response_data = CollectionSummaryResponse.model_validate(
-            result
-        )
-
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Collection summary retrieved successfully.",
         )
 
     except Exception as exc:
@@ -299,6 +218,84 @@ def get_application_overdue_summary(
             request=api_request,
             data=response_data,
             message="Application overdue summary retrieved successfully.",
+        )
+
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+# ============================================================
+# Get Collections by Repayment Schedule
+# ============================================================
+
+@router.get(
+    "/schedule/{application_id}/{repayment_schedule_id}",
+    response_model=ApiResponse[list[CollectionResponse]],
+)
+def get_collections_by_schedule(
+    application_id: str,
+    repayment_schedule_id: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = collection_service.get_collections_by_schedule(
+            db=db,
+            application_id=application_id,
+            repayment_schedule_id=repayment_schedule_id,
+        )
+
+        response_data = [
+            CollectionResponse.model_validate(item)
+            for item in result
+        ]
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Schedule collections retrieved successfully.",
+        )
+
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+# ============================================================
+# Get Collection Summary
+# ============================================================
+
+@router.get(
+    "/summary/{application_id}/{repayment_schedule_id}",
+    response_model=ApiResponse[CollectionSummaryResponse],
+)
+def get_collection_summary(
+    application_id: str,
+    repayment_schedule_id: str,
+    api_request: Request,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = collection_service.get_collection_summary(
+            db=db,
+            application_id=application_id,
+            repayment_schedule_id=repayment_schedule_id,
+        )
+
+        response_data = CollectionSummaryResponse.model_validate(
+            result
+        )
+
+        return success_response(
+            request=api_request,
+            data=response_data,
+            message="Collection summary retrieved successfully.",
         )
 
     except Exception as exc:

@@ -13,7 +13,7 @@ from backend.app.services.reconciliation_service import (
 
 
 router = APIRouter(
-    prefix="/post-disbursement",
+    prefix="/reconciliation",
     tags=["Reconciliation"],
 )
 
@@ -23,7 +23,7 @@ router = APIRouter(
 # ============================================================
 
 @router.post(
-    "/reconciliation/check",
+    "/check",
     response_model=ApiResponse[dict[str, Any]],
 )
 def check_reconciliation(
@@ -61,7 +61,7 @@ def check_reconciliation(
 # ============================================================
 
 @router.post(
-    "/reconciliation/close",
+    "/close",
     response_model=ApiResponse[dict[str, Any]],
 )
 def close_reconciliation(
@@ -104,65 +104,4 @@ def close_reconciliation(
         request=request,
         data=response_data,
         message="Reconciliation closed successfully.",
-    )
-
-
-# ============================================================
-# Update Operations Queue Status
-# ============================================================
-
-@router.post(
-    "/operations-queue",
-    response_model=ApiResponse[dict[str, Any]],
-)
-def update_operations_queue_status(
-    queue_id: str,
-    queue_status: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    try:
-        result = reconciliation_service.update_operations_queue_status(
-            db=db,
-            queue_id=queue_id,
-            queue_status=queue_status,
-        )
-
-    except ValueError as exc:
-        if str(exc) == "OPERATIONS_QUEUE_NOT_FOUND":
-            raise HTTPException(
-                status_code=404,
-                detail="Operations queue item not found",
-            )
-
-        if str(exc) == "INVALID_OPERATIONS_QUEUE_STATUS":
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid operations queue status",
-            )
-
-        if str(exc) == "OPERATIONS_QUEUE_ALREADY_RESOLVED":
-            raise HTTPException(
-                status_code=400,
-                detail="Operations queue item is already resolved",
-            )
-
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        )
-
-    response_data = {
-        "queue_id": result.queue_id,
-        "reconciliation_id": result.reconciliation_id,
-        "disbursement_id": result.disbursement_id,
-        "queue_type": result.queue_type,
-        "queue_status": result.queue_status,
-        "reason": result.reason,
-    }
-
-    return success_response(
-        request=request,
-        data=response_data,
-        message="Operations queue status updated successfully.",
     )
