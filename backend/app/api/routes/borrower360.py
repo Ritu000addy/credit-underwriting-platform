@@ -15,13 +15,13 @@ router = APIRouter(
 
 
 @router.get(
-    "/{customer_id}",
+    "/{customer_id}/{application_id}",
     response_model=ApiResponse[Borrower360],
 )
 def get_borrower_360(
     customer_id: str,
+    application_id: str,
     request: Request,
-    application_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     try:
