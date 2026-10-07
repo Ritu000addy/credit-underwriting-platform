@@ -19,6 +19,8 @@ from backend.app.core.exception_handlers import (
     unhandled_exception_handler,
 )
 
+from backend.app.api.routes.auth import router as auth_router
+
 # ============================================================
 # 1. LOS ORIGINATION
 # ============================================================
@@ -147,16 +149,104 @@ from backend.app.api.routes.collections import router as collections_router
 
 from backend.app.api.routes.lms import router as lms_router
 
-from backend.app.api.routes.auth import router as auth_router
+
 
 from backend.app.api.routes.operations import router as operations_router
 
+
+# ============================================================
+# Swagger / OpenAPI Tag Ordering
+# ============================================================
+
+openapi_tags = [
+    {
+        "name": "Authentication",
+        "description": "User authentication and authenticated-user information.",
+    },
+    {
+        "name": "LOS Origination",
+        "description": "Customer and loan application origination.",
+    },
+    {
+        "name": "Source Data Ingestion",
+        "description": "KYC, bureau, bank, employment, device, document, and internal data ingestion.",
+    },
+    {
+        "name": "Borrower 360",
+        "description": "Unified borrower profile and source-data aggregation.",
+    },
+    {
+        "name": "AI Credit Underwriting",
+        "description": "Credit assessment, underwriting validation, and policy validation.",
+    },
+    {
+        "name": "GenAI Underwriting",
+        "description": "GenAI-assisted underwriting analysis and credit insights.",
+    },
+    {
+        "name": "Manual Credit Review",
+        "description": "Manual credit review, reviewer recommendation, and checker decision workflow.",
+    },
+    {
+        "name": "Review Exceptions",
+        "description": "Exception creation, assignment, information requests, resolution, and closure.",
+    },
+    {
+        "name": "Model Governance",
+        "description": "Model registration, validation, approval, activation, deactivation, and rollback.",
+    },
+    {
+        "name": "Policy Governance",
+        "description": "Policy version lifecycle, activation, retirement, and rollback.",
+    },
+    {
+        "name": "Sanction",
+        "description": "Loan sanction creation and retrieval.",
+    },
+    {
+        "name": "Agreement",
+        "description": "Loan agreement creation and eSign workflow.",
+    },
+    {
+        "name": "Mandate",
+        "description": "Mandate creation and status management.",
+    },
+    {
+        "name": "Disbursement",
+        "description": "Beneficiary validation, disbursement eligibility, processing, webhook, and retry.",
+    },
+    {
+        "name": "Repayment",
+        "description": "Repayment schedule generation, repayment recording, and repayment summaries.",
+    },
+    {
+        "name": "Collections",
+        "description": "Collection recording, overdue monitoring, and collection summaries.",
+    },
+    {
+        "name": "Reconciliation",
+        "description": "Post-disbursement reconciliation and reconciliation operations.",
+    },
+    {
+        "name": "LMS Integration",
+        "description": "Integration with the Loan Management System for loan servicing.",
+    },
+    {
+        "name": "Audit",
+        "description": "Application-level audit trail and audit history.",
+    },
+    {
+        "name": "Credit Operations",
+        "description": "Operational dashboards, application monitoring, exceptions, disbursements, reconciliation, and collections.",
+    },
+]
 
 
 app = FastAPI(
     title="AI Credit Underwriting Platform",
     description="GenAI-enabled credit underwriting and disbursement platform",
-    version="0.1.0"
+    version="0.1.0",
+    openapi_tags=openapi_tags,
 )
 
 http_logger = logging.getLogger("backend.http")
@@ -250,12 +340,14 @@ async def request_id_middleware(
         )
 
     
+# 1. Authentication
+app.include_router(auth_router)
 
-# 1. LOS Origination
+# 2. LOS Origination
 app.include_router(customers_router)
 app.include_router(application_router)
 
-# 2. Source Data Ingestion
+# 3. Source Data Ingestion
 app.include_router(aadhaar_kyc_router)
 app.include_router(bureau_router)
 app.include_router(bank_analysis_router)
@@ -264,56 +356,59 @@ app.include_router(device_behaviour_router)
 app.include_router(documents_router)
 app.include_router(internal_history_router)
 
-# 3. Borrower 360
+# 4. Borrower 360
 app.include_router(borrower360_router)
 
-# 4. AI Credit Underwriting
+# 5. AI Credit Underwriting
 app.include_router(underwriting_router)
 app.include_router(underwriting_validation_router)
 app.include_router(policy_validation_router)
 
-# 5. GenAI Underwriting
+# 6. GenAI Underwriting
 app.include_router(genai_underwriting_router)
 
-# 6. Manual Review
+# 7. Manual Review
 app.include_router(manual_review_router)
 app.include_router(review_exception_router)
 
-# 7. Model Governance
+# 8. Review Exceptions
+app.include_router(review_exception_router)
+
+# 9. Model Governance
 app.include_router(model_registry_router)
 
+# 10. Policy Governance
 app.include_router(policy_version_router)
 
-# 8. Sanction
+# 11. Sanction
 app.include_router(sanctions_router)
 
-# 9. Agreement
+# 12. Agreement
 app.include_router(agreements_router)
 
-# 10. Mandate
+# 13. Mandate
 app.include_router(mandates_router)
 
-# 11. Disbursement
+# 14. Disbursement
 app.include_router(disbursements_router)
 
-# 12. Audit
-app.include_router(audit_router)
-
-# 13. Reconciliation
-app.include_router(post_disbursement_router)
-
-# 14. Repayment
+# 15. Repayment
 app.include_router(repayments_router)
 
-# 15. Collections
+# 16. Collections
 app.include_router(collections_router)
 
-# 16. LMS
+# 17. Reconciliation
+app.include_router(post_disbursement_router)
+
+# 18. LMS Integration
 app.include_router(lms_router)
 
-app.include_router(operations_router)
+# 19. Audit
+app.include_router(audit_router)
 
-app.include_router(auth_router)
+# 20. Credit Operations
+app.include_router(operations_router)
 
 @app.get("/health")
 def health_check():
