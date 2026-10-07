@@ -61,15 +61,6 @@ from backend.app.api.routes.policy_validation import (
 
 
 # ============================================================
-# 5. GENAI UNDERWRITING
-# ============================================================
-
-from backend.app.api.routes.genai_underwriting import (
-    router as genai_underwriting_router,
-)
-
-
-# ============================================================
 # 6. MANUAL REVIEW
 # ============================================================
 
@@ -80,7 +71,7 @@ from backend.app.api.routes.review_exception import (
 )
 
 # ============================================================
-# 7. MODEL GOVERNANCE
+# 7. GOVERNANCE
 # ============================================================
 
 from backend.app.api.routes.model_registry import (
@@ -118,13 +109,21 @@ from backend.app.api.routes.disbursements import (
 )
 
 # ============================================================
-# 12. AUDIT
+# 12. REPAYMENT
 # ============================================================
 
-from backend.app.api.routes.audit import router as audit_router
+from backend.app.api.routes.repayments import router as repayments_router
+
 
 # ============================================================
-# 13. RECONCILIATION
+# 13. COLLECTIONS
+# ============================================================
+
+from backend.app.api.routes.collections import router as collections_router
+
+
+# ============================================================
+# 14. RECONCILIATION
 # ============================================================
 
 from backend.app.api.routes.post_disbursement import (
@@ -132,26 +131,33 @@ from backend.app.api.routes.post_disbursement import (
 )
 
 # ============================================================
-# 14. REPAYMENT
-# ============================================================
-
-from backend.app.api.routes.repayments import router as repayments_router
-
-# ============================================================
-# 15. COLLECTIONS
-# ============================================================
-
-from backend.app.api.routes.collections import router as collections_router
-
-# ============================================================
-# 16. LMS
+# 15. LMS
 # ============================================================
 
 from backend.app.api.routes.lms import router as lms_router
 
-
+# ============================================================
+# 16. Credit Operations
+# ============================================================
 
 from backend.app.api.routes.operations import router as operations_router
+
+
+# ============================================================
+# 17. AUDIT
+# ============================================================
+
+from backend.app.api.routes.audit import router as audit_router
+
+
+# ============================================================
+# 18. GENAI UNDERWRITING
+# ============================================================
+
+from backend.app.api.routes.genai_underwriting import (
+    router as genai_underwriting_router,
+)
+
 
 
 # ============================================================
@@ -178,10 +184,6 @@ openapi_tags = [
     {
         "name": "AI Credit Underwriting",
         "description": "Credit assessment, underwriting validation, and policy validation.",
-    },
-    {
-        "name": "GenAI Underwriting",
-        "description": "GenAI-assisted underwriting analysis and credit insights.",
     },
     {
         "name": "Manual Credit Review",
@@ -232,12 +234,16 @@ openapi_tags = [
         "description": "Integration with the Loan Management System for loan servicing.",
     },
     {
+        "name": "Credit Operations",
+        "description": "Operational dashboards, application monitoring, exceptions, disbursements, reconciliation, and collections.",
+    },
+    {
         "name": "Audit",
         "description": "Application-level audit trail and audit history.",
     },
     {
-        "name": "Credit Operations",
-        "description": "Operational dashboards, application monitoring, exceptions, disbursements, reconciliation, and collections.",
+        "name": "GenAI Underwriting",
+        "description": "GenAI-assisted underwriting analysis and credit insights.",
     },
 ]
 
@@ -364,50 +370,51 @@ app.include_router(underwriting_router)
 app.include_router(underwriting_validation_router)
 app.include_router(policy_validation_router)
 
-# 6. GenAI Underwriting
-app.include_router(genai_underwriting_router)
-
-# 7. Manual Review
+# 6. Manual Review
 app.include_router(manual_review_router)
 
-# 8. Review Exceptions
+# 7. Review Exceptions
 app.include_router(review_exception_router)
 
-# 9. Model Governance
+# 8. Model Governance
 app.include_router(model_registry_router)
 
-# 10. Policy Governance
+# 9. Policy Governance
 app.include_router(policy_version_router)
 
-# 11. Sanction
+# 10. Sanction
 app.include_router(sanctions_router)
 
-# 12. Agreement
+# 11. Agreement
 app.include_router(agreements_router)
 
-# 13. Mandate
+# 12. Mandate
 app.include_router(mandates_router)
 
-# 14. Disbursement
+# 13. Disbursement
 app.include_router(disbursements_router)
 
-# 15. Repayment
+# 14. Repayment
 app.include_router(repayments_router)
 
-# 16. Collections
+# 15. Collections
 app.include_router(collections_router)
 
-# 17. Reconciliation
+# 16. Reconciliation
 app.include_router(reconciliation_router)
 
-# 18. LMS Integration
+# 17. LMS Integration
 app.include_router(lms_router)
+
+# 18. Credit Operations
+app.include_router(operations_router)
 
 # 19. Audit
 app.include_router(audit_router)
 
-# 20. Credit Operations
-app.include_router(operations_router)
+# 20. GenAI Underwriting
+app.include_router(genai_underwriting_router)
+
 
 @app.get("/health")
 def health_check():
