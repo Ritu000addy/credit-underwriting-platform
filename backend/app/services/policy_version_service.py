@@ -291,6 +291,7 @@ class PolicyVersionService:
             )
 
         policy = PolicyVersion(
+            policy_version_id=f"POLICY-VERSION-{policy_version.split('POL-')[-1]}",
             policy_version=policy_version,
             effective_from=effective_from,
             effective_to=effective_to,
