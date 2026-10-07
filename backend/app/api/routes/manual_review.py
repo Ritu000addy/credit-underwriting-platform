@@ -15,6 +15,7 @@ from backend.app.schemas.manual_review import (
     ManualReviewRecommendation,
     ManualReviewResponse,
     ManualReviewStart,
+    ManualReviewHistoryResponse,
 )
 from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.manual_review_history_service import (
@@ -113,7 +114,7 @@ def get_manual_review(
 
 @router.get(
     "/{application_id}/history",
-    response_model=ApiResponse[Any],
+    response_model=ApiResponse[list[ManualReviewHistoryResponse]],
 )
 def get_manual_review_history(
     application_id: str,
@@ -136,9 +137,14 @@ def get_manual_review_history(
         review_id=review.review_id,
     )
 
+    response_data = [
+        ManualReviewHistoryResponse.model_validate(item)
+        for item in result
+    ]
+
     return success_response(
         request=request,
-        data=result,
+        data=response_data,
         message="Manual review history retrieved successfully.",
     )
 

@@ -53,6 +53,21 @@ class ManualReviewStart(BaseModel):
 
         return value
 
+class ManualReviewHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    history_id: str
+    review_id: str
+    application_id: str
+    action: str
+    previous_status: str | None = None
+    new_status: str | None = None
+    actor_type: str
+    actor_reference: str | None = None
+    reviewer_id: str | None = None
+    reviewer_decision: str | None = None
+    remarks: str | None = None
+    created_at: datetime
 
 class ManualReviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
