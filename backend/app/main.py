@@ -79,6 +79,9 @@ from backend.app.api.routes.model_registry import (
 )
 from backend.app.api.routes.policy_version import router as policy_version_router
 
+
+from backend.app.api.routes import model_monitoring
+
 # ============================================================
 # 8. SANCTION
 # ============================================================
@@ -158,6 +161,9 @@ from backend.app.api.routes.genai_underwriting import (
     router as genai_underwriting_router,
 )
 
+from backend.app.api.routes.customer_communications import (
+    router as customer_communications_router,
+)
 
 
 # ============================================================
@@ -196,6 +202,10 @@ openapi_tags = [
     {
         "name": "Model Governance",
         "description": "Model registration, validation, approval, activation, deactivation, and rollback.",
+    },
+    {
+        "name": "Model Monitoring",
+        "description": "Operational monitoring of credit decisions, model outputs, and risk distributions.",
     },
     {
         "name": "Policy Governance",
@@ -256,6 +266,12 @@ app = FastAPI(
 )
 
 http_logger = logging.getLogger("backend.http")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    force=True,
+)
 
 @app.exception_handler(RequestValidationError)
 async def handle_request_validation_error(
@@ -334,7 +350,15 @@ async def request_id_middleware(
             else 500
         )
 
-        http_logger.info(
+        log_method = (
+            http_logger.error
+            if status_code >= 500
+            else http_logger.warning
+            if status_code >= 400
+            else http_logger.info
+        )
+
+        log_method(
             "request_completed "
             "request_id=%s method=%s path=%s "
             "status_code=%s duration_ms=%.2f",
@@ -379,6 +403,9 @@ app.include_router(review_exception_router)
 # 8. Model Governance
 app.include_router(model_registry_router)
 
+# Model monitoring
+app.include_router(model_monitoring.router)
+
 # 9. Policy Governance
 app.include_router(policy_version_router)
 
@@ -415,7 +442,49 @@ app.include_router(audit_router)
 # 20. GenAI Underwriting
 app.include_router(genai_underwriting_router)
 
+# 21. Customer Communications
+app.include_router(customer_communications_router)
 
+
+@app.get("/health/live")
+def liveness_check():
+    """Check that the application process is responding."""
+    return {
+        "status": "alive",
+        "service": "AI Credit Underwriting Platform",
+        "version": "0.1.0",
+    }
+
+
+@app.get("/health/ready")
+def readiness_check():
+    """Check whether the application can reach PostgreSQL."""
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+
+        http_logger.info(
+            "health_readiness status=ready database=healthy"
+        )
+
+        return {
+            "status": "ready",
+            "service": "AI Credit Underwriting Platform",
+            "version": "0.1.0",
+            "database": "healthy",
+        }
+
+    except Exception:
+        http_logger.exception(
+            "health_readiness status=not_ready database=unhealthy"
+        )
+
+        raise HTTPException(
+            status_code=503,
+            detail="Database readiness check failed.",
+        )
+
+        
 @app.get("/health")
 def health_check():
     try:

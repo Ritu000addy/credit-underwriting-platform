@@ -3,6 +3,7 @@ import logging
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+import backend.app.main as main_module
 
 
 client = TestClient(app)
@@ -36,3 +37,42 @@ def test_http_request_access_log(caplog):
     assert "path=/health" in caplog.text
     assert "status_code=200" in caplog.text
     assert "duration_ms=" in caplog.text
+
+def test_liveness_does_not_depend_on_database(monkeypatch):
+    def fail_database_connection(*args, **kwargs):
+        raise RuntimeError("Synthetic database outage")
+
+    monkeypatch.setattr(
+        main_module.engine,
+        "connect",
+        fail_database_connection,
+    )
+
+    response = client.get("/health/live")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["status"] == "alive"
+    assert payload["service"] == "AI Credit Underwriting Platform"
+    assert payload["version"] == "0.1.0"
+
+
+def test_readiness_reports_database_unavailable(monkeypatch):
+    def fail_database_connection(*args, **kwargs):
+        raise RuntimeError("Synthetic database outage")
+
+    monkeypatch.setattr(
+        main_module.engine,
+        "connect",
+        fail_database_connection,
+    )
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "SERVICE_UNAVAILABLE"
+    assert payload["meta"]["path"] == "/health/ready"

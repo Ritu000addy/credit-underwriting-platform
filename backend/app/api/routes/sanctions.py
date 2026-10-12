@@ -3,6 +3,9 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.database import get_db
 from backend.app.models.sanction import Sanction
 from backend.app.schemas.sanction import (
@@ -10,7 +13,7 @@ from backend.app.schemas.sanction import (
     SanctionResponse,
 )
 from backend.app.schemas.common import ApiResponse
-from backend.app.core.responses import success_response
+
 from backend.app.services.sanction_service import sanction_service
 
 
@@ -31,6 +34,15 @@ def create_sanction(
 ):
     sanction_id = f"SAN-{uuid.uuid4().hex[:12].upper()}"
 
+    log_workflow_event(
+        workflow="sanction_creation",
+        event="started",
+        request=request,
+        application_id=sanction.application_id,
+        entity_type="sanction",
+        entity_id=sanction_id,
+    )
+
     try:
         result = sanction_service.create_sanction(
             db=db,
@@ -48,6 +60,16 @@ def create_sanction(
 
         response_data = SanctionResponse.model_validate(result)
 
+        log_workflow_event(
+            workflow="sanction_creation",
+            event="completed",
+            request=request,
+            application_id=sanction.application_id,
+            entity_type="sanction",
+            entity_id=sanction_id,
+            status="APPROVED",
+        )
+
         return success_response(
             request=request,
             data=response_data,
@@ -55,6 +77,16 @@ def create_sanction(
         )
 
     except Exception as exc:
+        log_workflow_event(
+            workflow="sanction_creation",
+            event="failed",
+            request=request,
+            application_id=sanction.application_id,
+            entity_type="sanction",
+            entity_id=sanction_id,
+            error_code="SANCTION_CREATION_FAILED",
+        )
+
         db.rollback()
         raise HTTPException(
             status_code=400,

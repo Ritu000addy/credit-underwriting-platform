@@ -1,4 +1,5 @@
 import uuid
+import os
 from sqlalchemy.orm import Session
 
 from backend.app.models.credit_decision import CreditDecision
@@ -11,6 +12,7 @@ class CreditDecisionService:
         self,
         db: Session,
         decision: CreditDecisionOutput,
+        commit: bool = True,
     ) -> CreditDecision:
 
         credit_decision = CreditDecision(
@@ -51,13 +53,21 @@ class CreditDecisionService:
             policy_version=decision.policy_version,
             effective_from=decision.effective_from,
             effective_to=decision.effective_to,
+
+            # Monitoring Metadata
+            execution_environment=os.getenv("APP_ENV", "development").lower(),
+            record_source="UNDERWRITING_WORKFLOW",
         )
 
         db.add(credit_decision)
-        db.commit()
-        db.refresh(credit_decision)
+        if commit:
+            db.commit()
+            db.refresh(credit_decision)
+        else:
+            db.flush()
 
         return credit_decision
+
 
     def get_decision(
         self,

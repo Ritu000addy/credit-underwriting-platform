@@ -15,6 +15,7 @@ class ManualReviewService:
         db: Session,
         application_id: str,
         review_reason: str | None = None,
+        commit: bool = True,
     ) -> ManualReview:
 
         application_id = application_id.strip()
@@ -95,8 +96,11 @@ class ManualReviewService:
         )
 
         db.add(review)
-        db.commit()
-        db.refresh(review)
+        if commit:
+            db.commit()
+            db.refresh(review)
+        else:
+            db.flush()
 
         return review
 

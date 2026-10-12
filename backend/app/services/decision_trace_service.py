@@ -23,6 +23,7 @@ class DecisionTraceService:
         policy_evaluation: list[dict[str, Any]] | None,
         reason_codes: list[str] | None,
         decision_metadata: dict[str, Any] | None = None,
+        commit: bool = True,
     ) -> DecisionTrace:
 
         trace = DecisionTrace(
@@ -42,8 +43,11 @@ class DecisionTraceService:
         )
 
         db.add(trace)
-        db.commit()
-        db.refresh(trace)
+        if commit:
+            db.commit()
+            db.refresh(trace)
+        else:
+            db.flush()
 
         return trace
 

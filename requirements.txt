@@ -11,3 +11,5 @@ alembic
 PyJWT>=2.15.1
 pwdlib[argon2]>=0.3.1
 python-multipart>=0.0.32
+pypdf>=5,<7
+python-multipart>=0.0.9,<1

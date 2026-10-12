@@ -2,6 +2,8 @@ import uuid
 from decimal import Decimal
 from datetime import datetime
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from backend.app.models.disbursement import Disbursement
@@ -11,6 +13,7 @@ from backend.app.services.bank_routing_service import bank_routing_service
 from backend.app.services.internal_ledger_service import internal_ledger_service
 from backend.app.services.audit_log_service import audit_log_service
 
+logger = logging.getLogger("backend.workflow")
 
 class DisbursementService:
 
@@ -75,6 +78,14 @@ class DisbursementService:
 
         previous_status = disbursement.status
 
+        logger.info(
+            "disbursement_initiation_started "
+            "disbursement_id=%s application_id=%s previous_status=%s",
+            getattr(disbursement, "disbursement_id", "-"),
+            getattr(disbursement, "application_id", "-"),
+            previous_status,
+        )
+
         if disbursement.status != "CREATED":
             raise ValueError("DISBURSEMENT_NOT_ELIGIBLE_FOR_INITIATION")
 
@@ -104,6 +115,14 @@ class DisbursementService:
             )
             db.commit()
             db.refresh(disbursement)
+
+            logger.error(
+            "disbursement_initiation_failed "
+            "disbursement_id=%s application_id=%s",
+            disbursement.disbursement_id,
+            disbursement.application_id,
+        )
+
             return disbursement
 
         disbursement.status = "INITIATED"
@@ -145,6 +164,14 @@ class DisbursementService:
         db.commit()
         db.refresh(disbursement)
 
+        logger.info(
+            "disbursement_initiation_completed "
+            "disbursement_id=%s application_id=%s status=%s",
+            disbursement.disbursement_id,
+            disbursement.application_id,
+            disbursement.status,
+        )
+
         return disbursement
 
     def mark_processing(
@@ -154,6 +181,14 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
+
+        logger.info(
+            "disbursement_processing_started "
+            "disbursement_id=%s application_id=%s previous_status=%s",
+            getattr(disbursement, "disbursement_id", "-"),
+            getattr(disbursement, "application_id", "-"),
+            previous_status,
+        )
 
         if disbursement.status != "INITIATED":
             raise ValueError("DISBURSEMENT_NOT_INITIATED")
@@ -177,6 +212,13 @@ class DisbursementService:
         db.commit()
         db.refresh(disbursement)
 
+        logger.info(
+            "disbursement_processing_completed "
+            "disbursement_id=%s status=%s",
+            disbursement.disbursement_id,
+            disbursement.status,
+        )
+
         return disbursement
 
     def process_disbursement(
@@ -187,6 +229,14 @@ class DisbursementService:
     ) -> Disbursement:
 
         previous_status = disbursement.status
+
+        logger.info(
+            "disbursement_completion_started "
+            "disbursement_id=%s application_id=%s previous_status=%s",
+            getattr(disbursement, "disbursement_id", "-"),
+            getattr(disbursement, "application_id", "-"),
+            previous_status,
+        )
 
         if disbursement.status != "PROCESSING":
             raise ValueError(
@@ -214,6 +264,13 @@ class DisbursementService:
 
         db.commit()
         db.refresh(disbursement)
+
+        logger.info(
+            "disbursement_completion_succeeded "
+            "disbursement_id=%s status=%s",
+            disbursement.disbursement_id,
+            disbursement.status,
+        )
 
         return disbursement
 
@@ -254,6 +311,13 @@ class DisbursementService:
 
         db.commit()
         db.refresh(disbursement)
+
+        logger.error(
+            "disbursement_failed "
+            "disbursement_id=%s application_id=%s",
+            disbursement.disbursement_id,
+            disbursement.application_id,
+        )
 
         return disbursement
 

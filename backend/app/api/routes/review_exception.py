@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.database import get_db
+
 from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.review_exception import (
     ReviewExceptionAssign,
@@ -15,6 +18,7 @@ from backend.app.schemas.review_exception import (
     ReviewExceptionResponse,
     ReviewExceptionResumeInformation,
 )
+
 from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.review_exception_service import (
     review_exception_service,
@@ -36,6 +40,15 @@ def create_review_exception(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
+    log_workflow_event(
+        workflow="review_exception_creation",
+        event="started",
+        request=api_request,
+        application_id=request.application_id,
+        entity_type="review_exception",
+        entity_id=request.review_id,
+    )
+    
     try:
         result = review_exception_service.create_exception(
             db=db,
@@ -69,13 +82,16 @@ def create_review_exception(
             from_attributes=True,
         )
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Review exception created successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_creation",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="review_exception",
+            entity_id=request.review_id,
+            error_code="REVIEW_EXCEPTION_CREATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -83,11 +99,37 @@ def create_review_exception(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_creation",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="review_exception",
+            entity_id=request.review_id,
+            error_code="REVIEW_EXCEPTION_CREATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_CREATION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_creation",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=request.review_id,
+        status="OPEN",
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception created successfully.",
+        )
+
 
 @router.post(
     "/{exception_id}/assign",
@@ -99,12 +141,39 @@ def assign_review_exception(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    exception = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
+    log_workflow_event(
+        workflow="review_exception_assignment",
+        event="started",
+        request=api_request,
+        entity_type="review_exception",
+        entity_id=exception_id,
     )
 
+    try:
+        exception = review_exception_service.get_exception(
+            db=db,
+            exception_id=exception_id,
+        )
+    except Exception:
+        log_workflow_event(
+            workflow="review_exception_assignment",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_ASSIGNMENT_FAILED",
+        )
+        raise
+
     if exception is None:
+        log_workflow_event(
+            workflow="review_exception_assignment",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="Review exception not found.",
@@ -145,13 +214,16 @@ def assign_review_exception(
             from_attributes=True,
         )
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Review exception assigned successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_assignment",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_ASSIGNMENT_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -159,11 +231,36 @@ def assign_review_exception(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_assignment",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_ASSIGNMENT_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_ASSIGNMENT_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_assignment",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=exception_id,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception assigned successfully.",
+    )
 
 
 @router.post(
@@ -176,12 +273,41 @@ def request_exception_information(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    exception = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
+
+    log_workflow_event(
+        workflow="review_exception_information_request",
+        event="started",
+        request=api_request,
+        entity_type="review_exception",
+        entity_id=exception_id,
     )
 
+    try:
+        exception = review_exception_service.get_exception(
+            db=db,
+            exception_id=exception_id,
+        )
+
+    except Exception:
+        log_workflow_event(
+            workflow="review_exception_information_request",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_INFORMATION_REQUEST_FAILED",
+        )
+        raise
+
     if exception is None:
+        log_workflow_event(
+            workflow="review_exception_information_request",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="Review exception not found.",
@@ -223,13 +349,16 @@ def request_exception_information(
             from_attributes=True,
         )
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Additional information requested successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_information_request",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_INFORMATION_REQUEST_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -237,11 +366,36 @@ def request_exception_information(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_information_request",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_INFORMATION_REQUEST_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_INFORMATION_REQUEST_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_information_request",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=exception_id,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Additional information requested successfully.",
+    )
 
 
 @router.post(
@@ -254,12 +408,40 @@ def resume_review_exception(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    exception = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
+    log_workflow_event(
+        workflow="review_exception_resume",
+        event="started",
+        request=api_request,
+        entity_type="review_exception",
+        entity_id=exception_id,
     )
 
+    try:
+        exception = review_exception_service.get_exception(
+            db=db,
+            exception_id=exception_id,
+        )
+
+    except Exception:
+        log_workflow_event(
+            workflow="review_exception_resume",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESUME_FAILED",
+        )
+        raise
+
     if exception is None:
+        log_workflow_event(
+            workflow="review_exception_resume",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="Review exception not found.",
@@ -299,14 +481,17 @@ def resume_review_exception(
             result,
             from_attributes=True,
         )
-
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Review exception resumed successfully.",
-        )
-
+    
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_resume",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESUME_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -314,11 +499,36 @@ def resume_review_exception(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_resume",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESUME_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_RESUME_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_resume",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=exception_id,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception resumed successfully.",
+    )
 
 
 @router.post(
@@ -331,12 +541,40 @@ def resolve_review_exception(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    exception = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
+    log_workflow_event(
+        workflow="review_exception_resolution",
+        event="started",
+        request=api_request,
+        entity_type="review_exception",
+        entity_id=exception_id,
     )
 
+    try:
+        exception = review_exception_service.get_exception(
+            db=db,
+            exception_id=exception_id,
+        )
+    
+    except Exception:
+        log_workflow_event(
+            workflow="review_exception_resolution",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESOLUTION_FAILED",
+        )
+        raise
+
     if exception is None:
+        log_workflow_event(
+            workflow="review_exception_resolution",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="Review exception not found.",
@@ -379,13 +617,16 @@ def resolve_review_exception(
             from_attributes=True,
         )
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Review exception resolved successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_resolution",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESOLUTION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -393,11 +634,36 @@ def resolve_review_exception(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_resolution",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_RESOLUTION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_RESOLUTION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_resolution",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=exception_id,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception resolved successfully.",
+    )
 
 
 @router.post(
@@ -410,12 +676,39 @@ def close_review_exception(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    exception = review_exception_service.get_exception(
-        db=db,
-        exception_id=exception_id,
+    log_workflow_event(
+        workflow="review_exception_closure",
+        event="started",
+        request=api_request,
+        entity_type="review_exception",
+        entity_id=exception_id,
     )
 
+    try:
+        exception = review_exception_service.get_exception(
+            db=db,
+            exception_id=exception_id,
+        )
+    except Exception:
+        log_workflow_event(
+            workflow="review_exception_closure",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_CLOSURE_FAILED",
+        )
+        raise
+
     if exception is None:
+        log_workflow_event(
+            workflow="review_exception_closure",
+            event="failed",
+            request=api_request,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="Review exception not found.",
@@ -451,14 +744,17 @@ def close_review_exception(
             result,
             from_attributes=True,
         )
-
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Review exception closed successfully.",
-        )
-
+    
     except ValueError as exc:
+        log_workflow_event(
+            workflow="review_exception_closure",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_CLOSURE_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -466,11 +762,36 @@ def close_review_exception(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="review_exception_closure",
+            event="failed",
+            request=api_request,
+            application_id=exception.application_id,
+            entity_type="review_exception",
+            entity_id=exception_id,
+            error_code="REVIEW_EXCEPTION_CLOSURE_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="REVIEW_EXCEPTION_CLOSURE_FAILED",
         )
+
+    log_workflow_event(
+        workflow="review_exception_closure",
+        event="completed",
+        request=api_request,
+        application_id=result.application_id,
+        entity_type="review_exception",
+        entity_id=exception_id,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Review exception closed successfully.",
+    )
 
 
 @router.get(

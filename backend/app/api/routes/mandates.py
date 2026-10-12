@@ -2,14 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
+
+from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.models.mandate import Mandate
+
 from backend.app.schemas.mandate import (
     MandateCreate,
     MandateResponse,
     MandateUpdate,
 )
 from backend.app.schemas.common import ApiResponse
-from backend.app.core.responses import success_response
+
 from backend.app.services.mandate_service import mandate_service
 
 
@@ -30,6 +35,15 @@ def create_mandate(
 ):
     mandate_id = f"MANDATE-{mandate.application_id}"
 
+    log_workflow_event(
+        workflow="mandate_creation",
+        event="started",
+        request=request,
+        application_id=mandate.application_id,
+        entity_type="mandate",
+        entity_id=mandate_id,
+    )
+
     try:
         result = mandate_service.create_mandate(
             db=db,
@@ -43,17 +57,50 @@ def create_mandate(
 
         response_data = MandateResponse.model_validate(result)
 
-        return success_response(
-            request=request,
-            data=response_data,
-            message="Mandate created successfully.",
-        )
-
     except ValueError as exc:
+        db.rollback()
+        log_workflow_event(
+            workflow="mandate_creation",
+            event="failed",
+            request=request,
+            application_id=mandate.application_id,
+            entity_type="mandate",
+            entity_id=mandate_id,
+            error_code="MANDATE_CREATION_FAILED",
+        )
         raise HTTPException(
             status_code=400,
             detail=str(exc),
         )
+
+    except Exception:
+        db.rollback()
+        log_workflow_event(
+            workflow="mandate_creation",
+            event="failed",
+            request=request,
+            application_id=mandate.application_id,
+            entity_type="mandate",
+            entity_id=mandate_id,
+            error_code="MANDATE_CREATION_FAILED",
+        )
+        raise
+
+    log_workflow_event(
+        workflow="mandate_creation",
+        event="completed",
+        request=request,
+        application_id=mandate.application_id,
+        entity_type="mandate",
+        entity_id=mandate_id,
+        status="CREATED",
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message="Mandate created successfully.",
+    )
 
 
 @router.post(
@@ -66,13 +113,40 @@ def update_mandate_status(
     request: Request,
     db: Session = Depends(get_db),
 ):
+
+    workflow_name = (
+        "mandate_initiation"
+        if update.status == "INITIATED"
+        else "mandate_completion"
+    )
+
     mandate = db.get(Mandate, mandate_id)
 
     if mandate is None:
+        log_workflow_event(
+            workflow=workflow_name,
+            event="failed",
+            request=request,
+            entity_type="mandate",
+            entity_id=mandate_id,
+            status=update.status,
+            error_code="MANDATE_NOT_FOUND",
+        )
+
         raise HTTPException(
             status_code=404,
             detail="Mandate not found",
         )
+
+    log_workflow_event(
+        workflow=workflow_name,
+        event="started",
+        request=request,
+        application_id=mandate.application_id,
+        entity_type="mandate",
+        entity_id=mandate_id,
+        status=update.status,
+    )
 
     try:
         if update.status == "INITIATED":
@@ -81,32 +155,63 @@ def update_mandate_status(
                 mandate=mandate,
             )
 
-            response_data = MandateResponse.model_validate(result)
+            response_message = "Mandate initiated successfully."
 
-            return success_response(
-                request=request,
-                data=response_data,
-                message="Mandate initiated successfully.",
+        else:
+            result = mandate_service.complete_mandate(
+                db=db,
+                mandate=mandate,
+                status=update.status,
+                failure_reason=update.failure_reason,
+                completed_at=update.completed_at,
             )
-
-        result = mandate_service.complete_mandate(
-            db=db,
-            mandate=mandate,
-            status=update.status,
-            failure_reason=update.failure_reason,
-            completed_at=update.completed_at,
-        )
+            response_message = "Mandate status updated successfully."
 
         response_data = MandateResponse.model_validate(result)
 
-        return success_response(
+    except ValueError as exc:
+        db.rollback()
+        log_workflow_event(
+            workflow=workflow_name,
+            event="failed",
             request=request,
-            data=response_data,
-            message="Mandate status updated successfully.",
+            application_id=mandate.application_id,
+            entity_type="mandate",
+            entity_id=mandate_id,
+            status=update.status,
+            error_code="MANDATE_STATUS_UPDATE_FAILED",
         )
 
-    except ValueError as exc:
         raise HTTPException(
             status_code=400,
             detail=str(exc),
         )
+
+    except Exception:
+        log_workflow_event(
+            workflow=workflow_name,
+            event="failed",
+            request=request,
+            application_id=mandate.application_id,
+            entity_type="mandate",
+            entity_id=mandate_id,
+            status=update.status,
+            error_code="MANDATE_STATUS_UPDATE_FAILED",
+        )
+        raise
+
+    log_workflow_event(
+        workflow=workflow_name,
+        event="completed",
+        request=request,
+        application_id=mandate.application_id,
+        entity_type="mandate",
+        entity_id=mandate_id,
+        status=update.status,
+    )
+
+    return success_response(
+        request=request,
+        data=response_data,
+        message=response_message,
+    )

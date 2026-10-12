@@ -21,10 +21,64 @@ depends_on = None
 SOURCE_POLICY_VERSION = "POL-2026.09"
 TARGET_POLICY_VERSION = "POL-2026.10"
 TARGET_EFFECTIVE_FROM = datetime(2026, 10, 7)
+TARGET_POLICY_VERSION_ID = "POLICY-VERSION-2026.10"
 
 
 def upgrade() -> None:
     bind = op.get_bind()
+
+    target_policy = bind.execute(
+        sa.text(
+            """
+            SELECT policy_version_id
+            FROM policy_versions
+            WHERE policy_version = :policy_version
+            """
+        ),
+        {"policy_version": TARGET_POLICY_VERSION},
+    ).fetchall()
+
+    if not target_policy:
+        bind.execute(
+            sa.text(
+                """
+                INSERT INTO policy_versions (
+                    policy_version_id,
+                    policy_version,
+                    effective_from,
+                    effective_to,
+                    status,
+                    policy_reference,
+                    governance_notes,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :policy_version_id,
+                    :policy_version,
+                    :effective_from,
+                    NULL,
+                    'DRAFT',
+                    :policy_reference,
+                    :governance_notes,
+                    :created_at,
+                    :updated_at
+                )
+                """
+            ),
+            {
+                "policy_version_id": TARGET_POLICY_VERSION_ID,
+                "policy_version": TARGET_POLICY_VERSION,
+                "effective_from": TARGET_EFFECTIVE_FROM,
+                "policy_reference": "POLICY_CONFIG_2026.10",
+                "governance_notes": (
+                    "Draft policy cloned from POL-2026.09. "
+                    "Requires governance review before activation."
+                ),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            },
+        )
 
     # Ensure target policy version exists.
     target_policy = bind.execute(
@@ -175,9 +229,26 @@ def downgrade() -> None:
             """
             DELETE FROM credit_policy_rules
             WHERE policy_version = :policy_version
+            AND rule_id LIKE :rule_id_pattern
             """
         ),
         {
+            "policy_version": TARGET_POLICY_VERSION,
+            "rule_id_pattern": "%-2026.10",
+        },
+    )
+
+    bind.execute(
+        sa.text(
+            """
+            DELETE FROM policy_versions
+            WHERE policy_version_id = :policy_version_id
+              AND policy_version = :policy_version
+              AND status = 'DRAFT'
+            """
+        ),
+        {
+            "policy_version_id": "POLICY-VERSION-2026.10",
             "policy_version": TARGET_POLICY_VERSION,
         },
     )

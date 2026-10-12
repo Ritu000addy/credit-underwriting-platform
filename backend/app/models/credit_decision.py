@@ -176,6 +176,17 @@ class CreditDecision(Base):
         nullable=True,
     )
 
+    
+    execution_environment: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    record_source: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
     policy_version: Mapped[str | None] = mapped_column(
         String(100),
         nullable=False,

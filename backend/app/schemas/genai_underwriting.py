@@ -15,6 +15,7 @@ class GenAIUnderwritingResult(BaseModel):
     policy_exceptions: list[str] = Field(default_factory=list)
 
     officer_summary: str | None = None
+    llm_analyst_narrative: str | None = None
 
     model_name: str | None = None
     model_version: str | None = None

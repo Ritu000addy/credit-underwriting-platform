@@ -3,7 +3,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.workflow_logging import log_workflow_event
+from backend.app.core.responses import success_response
+
 from backend.app.database import get_db
+
 from backend.app.schemas.repayment import (
     RepaymentScheduleGenerateRequest,
     RepaymentScheduleResponse,
@@ -12,7 +16,7 @@ from backend.app.schemas.repayment import (
     RepaymentSummaryResponse,
 )
 from backend.app.schemas.common import ApiResponse
-from backend.app.core.responses import success_response
+
 
 from backend.app.services.repayment_schedule_service import (
     repayment_schedule_service,
@@ -40,6 +44,14 @@ def generate_repayment_schedule(
     db: Session = Depends(get_db),
 ):
     try:
+        log_workflow_event(
+            workflow="repayment_schedule_generation",
+            event="started",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="repayment_schedule",
+        )
+
         schedule = repayment_schedule_service.generate_schedule(
             db=db,
             application_id=request.application_id,
@@ -55,6 +67,14 @@ def generate_repayment_schedule(
             for item in schedule
         ]
 
+        log_workflow_event(
+            workflow="repayment_schedule_generation",
+            event="completed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="repayment_schedule",
+        )
+
         return success_response(
             request=api_request,
             data=response_data,
@@ -62,6 +82,16 @@ def generate_repayment_schedule(
         )
 
     except Exception as exc:
+
+        log_workflow_event(
+            workflow="repayment_schedule_generation",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="repayment_schedule",
+            error_code="REPAYMENT_SCHEDULE_GENERATION_FAILED",
+        )
+
         db.rollback()
         raise HTTPException(
             status_code=400,
@@ -83,6 +113,14 @@ def record_repayment(
     db: Session = Depends(get_db),
 ):
     try:
+        log_workflow_event(
+            workflow="repayment_recording",
+            event="started",
+            request=api_request,
+            application_id=getattr(request, "application_id", None),
+            entity_type="repayment",
+        )
+
         repayment = repayment_service.record_repayment(
             db=db,
             repayment_id=f"REP-{uuid.uuid4().hex[:12].upper()}",
@@ -98,6 +136,15 @@ def record_repayment(
             repayment
         )
 
+        log_workflow_event(
+            workflow="repayment_recording",
+            event="completed",
+            request=api_request,
+            application_id=getattr(request, "application_id", None),
+            entity_type="repayment",
+            entity_id=getattr(repayment, "repayment_id", None),
+        )
+
         return success_response(
             request=api_request,
             data=response_data,
@@ -105,11 +152,33 @@ def record_repayment(
         )
 
     except ValueError as exc:
+        log_workflow_event(
+            workflow="repayment_recording",
+            event="failed",
+            request=api_request,
+            application_id=getattr(request, "application_id", None),
+            entity_type="repayment",
+            error_code="REPAYMENT_RECORDING_FAILED",
+        )
+        
         db.rollback()
         raise HTTPException(
             status_code=400,
             detail=str(exc),
         )
+
+    except Exception:
+        db.rollback()
+
+        log_workflow_event(
+            workflow="repayment_recording",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="repayment",
+            error_code="REPAYMENT_RECORDING_UNEXPECTED_FAILURE",
+        )
+        raise
 
 
 # ============================================================

@@ -4,9 +4,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from backend.app.database import get_db
-from backend.app.schemas.common import ApiResponse
+from backend.app.core.workflow_logging import log_workflow_event
 from backend.app.core.responses import success_response
+
+from backend.app.database import get_db
+
+from backend.app.schemas.common import ApiResponse
+
 from backend.app.services.reconciliation_service import (
     reconciliation_service,
 )
@@ -33,27 +37,56 @@ def check_reconciliation(
     bank_amount: Decimal | None = None,
     db: Session = Depends(get_db),
 ):
-    result = reconciliation_service.reconcile_disbursement(
-        db=db,
-        disbursement_id=disbursement_id,
-        bank_reference=bank_reference,
-        bank_amount=bank_amount,
-    )
-
-    response_data = {
-        "status": result.status,
-        "disbursement_id": result.disbursement_id,
-        "bank_reference": result.bank_reference,
-        "bank_amount": result.bank_amount,
-        "expected_amount": result.expected_amount,
-        "mismatch_reason": result.mismatch_reason,
-    }
-
-    return success_response(
+    log_workflow_event(
+        workflow="disbursement_reconciliation",
+        event="started",
         request=request,
-        data=response_data,
-        message="Reconciliation check completed successfully.",
+        entity_type="disbursement",
+        entity_id=disbursement_id,
     )
+
+    try:
+        result = reconciliation_service.reconcile_disbursement(
+            db=db,
+            disbursement_id=disbursement_id,
+            bank_reference=bank_reference,
+            bank_amount=bank_amount,
+        )
+
+        response_data = {
+            "status": result.status,
+            "disbursement_id": result.disbursement_id,
+            "bank_reference": result.bank_reference,
+            "bank_amount": result.bank_amount,
+            "expected_amount": result.expected_amount,
+            "mismatch_reason": result.mismatch_reason,
+        }
+
+        log_workflow_event(
+            workflow="disbursement_reconciliation",
+            event="completed",
+            request=request,
+            entity_type="disbursement",
+            entity_id=disbursement_id,
+        )
+
+        return success_response(
+            request=request,
+            data=response_data,
+            message="Reconciliation check completed successfully.",
+        )
+
+    except Exception:
+        db.rollback()
+        log_workflow_event(
+            workflow="disbursement_reconciliation",
+            event="failed",
+            request=request,
+            entity_type="disbursement",
+            entity_id=disbursement_id,
+            error_code="DISBURSEMENT_RECONCILIATION_FAILED",
+        )
+        raise
 
 
 # ============================================================
@@ -69,6 +102,14 @@ def close_reconciliation(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    log_workflow_event(
+        workflow="reconciliation_close",
+        event="started",
+        request=request,
+        entity_type="disbursement",
+        entity_id=reconciliation_id,
+    )
+
     try:
         result = reconciliation_service.close_reconciliation(
             db=db,
@@ -76,6 +117,17 @@ def close_reconciliation(
         )
 
     except ValueError as exc:
+        db.rollback()
+        log_workflow_event(
+            workflow="reconciliation_close",
+            event="failed",
+            request=request,
+            entity_type="reconciliation",
+            entity_id=reconciliation_id,
+            error_code="RECONCILIATION_CLOSE_FAILED",
+        )
+        raise
+
         if str(exc) == "RECONCILIATION_NOT_FOUND":
             raise HTTPException(
                 status_code=404,
@@ -91,7 +143,19 @@ def close_reconciliation(
         raise HTTPException(
             status_code=400,
             detail=str(exc),
+        ) from exc
+
+    except Exception:
+        db.rollback()
+        log_workflow_event(
+            workflow="reconciliation_close",
+            event="failed",
+            request=request,
+            entity_type="reconciliation",
+            entity_id=reconciliation_id,
+            error_code="RECONCILIATION_CLOSE_FAILED",
         )
+        raise
 
     response_data = {
         "reconciliation_id": result.reconciliation_id,
@@ -99,6 +163,14 @@ def close_reconciliation(
         "reconciliation_status": result.reconciliation_status,
         "reconciled_at": result.reconciled_at,
     }
+
+    log_workflow_event(
+        workflow="reconciliation_close",
+        event="completed",
+        request=request,
+        entity_type="disbursement",
+        entity_id=reconciliation_id,
+    )
 
     return success_response(
         request=request,

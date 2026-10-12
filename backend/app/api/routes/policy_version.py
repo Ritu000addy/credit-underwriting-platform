@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.database import get_db
+
 from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.policy_version_governance import (
     PolicyVersionAction,
@@ -12,6 +15,7 @@ from backend.app.schemas.policy_version_governance import (
     PolicyVersionResponse,
     PolicyVersionRollback,
 )
+
 from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.policy_version_service import (
     policy_version_service,
@@ -33,6 +37,14 @@ def create_policy_version(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
+    log_workflow_event(
+        workflow="policy_version_creation",
+        event="started",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=request.policy_version,
+    )
+
     try:
         result = policy_version_service.create_policy_version(
             db=db,
@@ -66,13 +78,15 @@ def create_policy_version(
 
         response_data = PolicyVersionResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version created successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_creation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=request.policy_version,
+            error_code="POLICY_VERSION_CREATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -80,11 +94,34 @@ def create_policy_version(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="policy_version_creation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=request.policy_version,
+            error_code="POLICY_VERSION_CREATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="POLICY_VERSION_CREATION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="policy_version_creation",
+        event="completed",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=result.policy_version,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy version created successfully.",
+    )
 
 
 @router.post(
@@ -98,12 +135,28 @@ def activate_policy_version(
 ):
     policy_version = request.policy_version
 
+    log_workflow_event(
+        workflow="policy_version_activation",
+        event="started",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=policy_version,
+    )
+
     try:
         policy = policy_version_service.get_policy_version(
             db=db,
             policy_version=policy_version,
         )
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_activation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail=str(exc),
@@ -140,13 +193,15 @@ def activate_policy_version(
 
         response_data = PolicyVersionResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version activated successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_activation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_ACTIVATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -154,11 +209,34 @@ def activate_policy_version(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="policy_version_activation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_ACTIVATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="POLICY_VERSION_ACTIVATION_FAILED",
         )
+    
+    log_workflow_event(
+        workflow="policy_version_activation",
+        event="completed",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=result.policy_version,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy version activated successfully.",
+    )
 
 
 @router.post(
@@ -172,12 +250,28 @@ def deactivate_policy_version(
 ):
     policy_version = request.policy_version
 
+    log_workflow_event(
+        workflow="policy_version_deactivation",
+        event="started",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=policy_version,
+    )
+
     try:
         policy = policy_version_service.get_policy_version(
             db=db,
             policy_version=policy_version,
         )
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail=str(exc),
@@ -214,13 +308,15 @@ def deactivate_policy_version(
 
         response_data = PolicyVersionResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version deactivated successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_DEACTIVATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -228,11 +324,34 @@ def deactivate_policy_version(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="policy_version_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_DEACTIVATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="POLICY_VERSION_DEACTIVATION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="policy_version_deactivation",
+        event="completed",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=result.policy_version,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy version deactivated successfully.",
+    )
 
 
 @router.post(
@@ -244,6 +363,17 @@ def rollback_policy_version(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
+
+    target_policy_version = request.target_policy_version
+
+    log_workflow_event(
+        workflow="policy_version_rollback",
+        event="started",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=target_policy_version,
+    )
+
     try:
         result = policy_version_service.rollback_policy(
             db=db,
@@ -274,13 +404,15 @@ def rollback_policy_version(
 
         response_data = PolicyVersionResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version rollback completed successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_rollback",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=target_policy_version,
+            error_code="POLICY_VERSION_ROLLBACK_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -288,11 +420,35 @@ def rollback_policy_version(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="policy_version_rollback",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=target_policy_version,
+            error_code="POLICY_VERSION_ROLLBACK_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="POLICY_VERSION_ROLLBACK_FAILED",
         )
+
+    log_workflow_event(
+        workflow="policy_version_rollback",
+        event="completed",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=result.policy_version,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy version rollback completed successfully.",
+    )
+
 
 @router.post(
     "/retire",
@@ -305,12 +461,28 @@ def retire_policy_version(
 ):
     policy_version = request.policy_version
 
+    log_workflow_event(
+        workflow="policy_version_retirement",
+        event="started",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=policy_version,
+    )
+
     try:
         policy = policy_version_service.get_policy_version(
             db=db,
             policy_version=policy_version,
         )
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_retirement",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail=str(exc),
@@ -347,13 +519,15 @@ def retire_policy_version(
 
         response_data = PolicyVersionResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Policy version retired successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="policy_version_retirement",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_RETIREMENT_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -361,11 +535,35 @@ def retire_policy_version(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="policy_version_retirement",
+            event="failed",
+            request=api_request,
+            entity_type="policy_version",
+            entity_id=policy_version,
+            error_code="POLICY_VERSION_RETIREMENT_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="POLICY_VERSION_RETIREMENT_FAILED",
         )
+
+    log_workflow_event(
+        workflow="policy_version_retirement",
+        event="completed",
+        request=api_request,
+        entity_type="policy_version",
+        entity_id=result.policy_version,
+        status=result.status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Policy version retired successfully.",
+    )
+
 
 @router.get(
     "",

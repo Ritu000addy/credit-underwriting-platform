@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.database import get_db
+
 from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.model_registry import (
     ModelApprovalRequest,
@@ -15,6 +18,7 @@ from backend.app.schemas.model_registry import (
     ModelValidationStart,
     ModelVersionRequest,
 )
+
 from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.model_registry_service import (
     model_registry_service,
@@ -36,6 +40,14 @@ def register_model(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
+    log_workflow_event(
+        workflow="model_registration",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=request.model_registry_id,
+    )
+
     try:
         result = model_registry_service.register_model(
             db=db,
@@ -77,13 +89,15 @@ def register_model(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model registered successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_registration",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=request.model_registry_id,
+            error_code="MODEL_REGISTRATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -91,11 +105,35 @@ def register_model(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_registration",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=request.model_registry_id,
+            error_code="MODEL_REGISTRATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_REGISTRATION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="model_registration",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=result.model_registry_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model registered successfully.",
+        )
+
 
 @router.post(
     "/validation/start",
@@ -106,13 +144,43 @@ def start_model_validation(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.model_version,
+    log_entity_id = f"{request.model_name}:{request.model_version}"
+
+    log_workflow_event(
+        workflow="model_validation_start",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
 
+    try:
+        model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
+
+    except Exception:
+        log_workflow_event(
+            workflow="model_validation_start",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_START_FAILED",
+        )
+        raise
+
     if model is None:
+        log_workflow_event(
+            workflow="model_validation_start",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="MODEL_NOT_FOUND",
@@ -145,13 +213,15 @@ def start_model_validation(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model validation started successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_validation_start",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_START_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -159,11 +229,34 @@ def start_model_validation(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_validation_start",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_START_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_VALIDATION_START_FAILED",
         )
+
+    log_workflow_event(
+        workflow="model_validation_start",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+        )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model validation started successfully.",
+    )
 
 
 @router.post(
@@ -175,13 +268,43 @@ def complete_model_validation(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.model_version,
+    log_entity_id = f"{request.model_name}:{request.model_version}"
+
+    log_workflow_event(
+        workflow="model_validation_completion",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
 
+    try:
+        model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
+
+    except Exception:
+        log_workflow_event(
+            workflow="model_validation_completion",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_COMPLETION_FAILED",
+        )
+        raise
+
     if model is None:
+        log_workflow_event(
+            workflow="model_validation_completion",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="MODEL_NOT_FOUND",
@@ -220,13 +343,15 @@ def complete_model_validation(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model validation completed successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_validation_completion",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_COMPLETION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -234,11 +359,35 @@ def complete_model_validation(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_validation_completion",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_VALIDATION_COMPLETION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_VALIDATION_COMPLETION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="model_validation_completion",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model validation completed successfully.",
+    )
+
 
 
 @router.post(
@@ -250,13 +399,42 @@ def approve_model(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.model_version,
+    log_entity_id = f"{request.model_name}:{request.model_version}"
+
+    log_workflow_event(
+        workflow="model_approval",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
 
+    try:
+        model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
+    except Exception:
+        log_workflow_event(
+            workflow="model_approval",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_APPROVAL_FAILED",
+        )
+        raise
+
     if model is None:
+        log_workflow_event(
+            workflow="model_approval",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="MODEL_NOT_FOUND",
@@ -294,13 +472,15 @@ def approve_model(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model approved successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_approval",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_APPROVAL_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -308,10 +488,33 @@ def approve_model(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_approval",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_APPROVAL_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_APPROVAL_FAILED",
+        )
+
+    log_workflow_event(
+        workflow="model_approval",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model approved successfully.",
         )
 
 
@@ -324,13 +527,43 @@ def activate_model(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.model_version,
+
+    log_entity_id = f"{request.model_name}:{request.model_version}"
+
+    log_workflow_event(
+        workflow="model_activation",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
 
+    try:
+        model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
+    except Exception:
+        log_workflow_event(
+            workflow="model_activation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_ACTIVATION_FAILED",
+        )
+        raise
+
     if model is None:
+        log_workflow_event(
+            workflow="model_activation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="MODEL_NOT_FOUND",
@@ -367,13 +600,15 @@ def activate_model(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model activated successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_activation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_ACTIVATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -381,11 +616,35 @@ def activate_model(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_activation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_ACTIVATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_ACTIVATION_FAILED",
         )
+
+    log_workflow_event(
+        workflow="model_activation",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model activated successfully.",
+    )
+
 
 
 @router.post(
@@ -397,13 +656,42 @@ def deactivate_model(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.model_version,
+    log_entity_id = f"{request.model_name}:{request.model_version}"
+
+    log_workflow_event(
+        workflow="model_deactivation",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
 
+    try:
+        model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.model_version,
+        )
+    except Exception:
+        log_workflow_event(
+            workflow="model_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_DEACTIVATION_FAILED",
+        )
+        raise
+
     if model is None:
+        log_workflow_event(
+            workflow="model_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_NOT_FOUND",
+        )
         raise HTTPException(
             status_code=404,
             detail="MODEL_NOT_FOUND",
@@ -440,13 +728,15 @@ def deactivate_model(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model deactivated successfully.",
-        )
-
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_DEACTIVATION_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -454,10 +744,33 @@ def deactivate_model(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_deactivation",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_DEACTIVATION_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_DEACTIVATION_FAILED",
+        )
+
+    log_workflow_event(
+        workflow="model_deactivation",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model deactivated successfully.",
         )
 
 
@@ -470,31 +783,61 @@ def rollback_model(
     api_request: Request,
     db: Session = Depends(get_db),
 ):
-    current_model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.current_version,
+    log_entity_id = (
+        f"{request.model_name}:"
+        f"{request.current_version}->"
+        f"{request.rollback_version}"
     )
 
-    if current_model is None:
-        raise HTTPException(
-            status_code=404,
-            detail="CURRENT_MODEL_NOT_FOUND",
-        )
-
-    rollback_model = model_registry_service.get_model(
-        db=db,
-        model_name=request.model_name,
-        model_version=request.rollback_version,
+    log_workflow_event(
+        workflow="model_rollback",
+        event="started",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
     )
-
-    if rollback_model is None:
-        raise HTTPException(
-            status_code=404,
-            detail="ROLLBACK_MODEL_NOT_FOUND",
-        )
 
     try:
+        current_model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.current_version,
+        )
+
+        if current_model is None:
+            log_workflow_event(
+                workflow="model_rollback",
+                event="failed",
+                request=api_request,
+                entity_type="model_registry",
+                entity_id=log_entity_id,
+                error_code="CURRENT_MODEL_NOT_FOUND",
+            )
+            raise HTTPException(
+                status_code=404,
+                detail="CURRENT_MODEL_NOT_FOUND",
+            )
+
+        rollback_model = model_registry_service.get_model(
+            db=db,
+            model_name=request.model_name,
+            model_version=request.rollback_version,
+        )
+
+        if rollback_model is None:
+            log_workflow_event(
+                workflow="model_rollback",
+                event="failed",
+                request=api_request,
+                entity_type="model_registry",
+                entity_id=log_entity_id,
+                error_code="ROLLBACK_MODEL_NOT_FOUND",
+            )
+            raise HTTPException(
+                status_code=404,
+                detail="ROLLBACK_MODEL_NOT_FOUND",
+            )
+
         result = model_registry_service.rollback_model(
             db=db,
             current_model=current_model,
@@ -525,13 +868,18 @@ def rollback_model(
 
         response_data = ModelRegistryResponse.model_validate(result)
 
-        return success_response(
-            request=api_request,
-            data=response_data,
-            message="Model rollback completed successfully.",
-        )
+    except HTTPException:
+        raise
 
     except ValueError as exc:
+        log_workflow_event(
+            workflow="model_rollback",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_ROLLBACK_REJECTED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=409,
@@ -539,11 +887,34 @@ def rollback_model(
         )
 
     except Exception:
+        log_workflow_event(
+            workflow="model_rollback",
+            event="failed",
+            request=api_request,
+            entity_type="model_registry",
+            entity_id=log_entity_id,
+            error_code="MODEL_ROLLBACK_FAILED",
+        )
         db.rollback()
         raise HTTPException(
             status_code=500,
             detail="MODEL_ROLLBACK_FAILED",
         )
+
+    log_workflow_event(
+        workflow="model_rollback",
+        event="completed",
+        request=api_request,
+        entity_type="model_registry",
+        entity_id=log_entity_id,
+        status=result.lifecycle_status,
+    )
+
+    return success_response(
+        request=api_request,
+        data=response_data,
+        message="Model rollback completed successfully.",
+    )
 
 
 @router.get(

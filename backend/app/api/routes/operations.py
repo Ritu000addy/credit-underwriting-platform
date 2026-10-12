@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session
 from typing import Any
 
 from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
+
 from backend.app.database import get_db
+
 from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.operations import (
     OperationsDashboardResponse,
@@ -15,6 +18,7 @@ from backend.app.schemas.operations import (
     OperationsReconciliationResponse,
     OperationsOverdueCollectionResponse,
 )
+
 from backend.app.services.operations_service import (
     operations_service,
 )
@@ -38,6 +42,15 @@ def update_operations_queue_status(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    log_workflow_event(
+        workflow="operations_queue_status_update",
+        event="started",
+        request=request,
+        entity_type="operations_queue",
+        entity_id=queue_id,
+        status=queue_status,
+    )
+
     try:
         result = reconciliation_service.update_operations_queue_status(
             db=db,
@@ -46,19 +59,40 @@ def update_operations_queue_status(
         )
 
     except ValueError as exc:
-        if str(exc) == "OPERATIONS_QUEUE_NOT_FOUND":
+        error_message = str(exc)
+
+        if error_message == "OPERATIONS_QUEUE_NOT_FOUND":
+            error_code = "OPERATIONS_QUEUE_NOT_FOUND"
+        elif error_message == "INVALID_OPERATIONS_QUEUE_STATUS":
+            error_code = "INVALID_OPERATIONS_QUEUE_STATUS"
+        elif error_message == "OPERATIONS_QUEUE_ALREADY_RESOLVED":
+            error_code = "OPERATIONS_QUEUE_ALREADY_RESOLVED"
+        else:
+            error_code = "OPERATIONS_QUEUE_STATUS_UPDATE_REJECTED"
+
+        log_workflow_event(
+            workflow="operations_queue_status_update",
+            event="failed",
+            request=request,
+            entity_type="operations_queue",
+            entity_id=queue_id,
+            status=queue_status,
+            error_code=error_code,
+        )
+
+        if error_message == "OPERATIONS_QUEUE_NOT_FOUND":
             raise HTTPException(
                 status_code=404,
                 detail="Operations queue item not found",
             )
 
-        if str(exc) == "INVALID_OPERATIONS_QUEUE_STATUS":
+        if error_message == "INVALID_OPERATIONS_QUEUE_STATUS":
             raise HTTPException(
                 status_code=400,
                 detail="Invalid operations queue status",
             )
 
-        if str(exc) == "OPERATIONS_QUEUE_ALREADY_RESOLVED":
+        if error_message == "OPERATIONS_QUEUE_ALREADY_RESOLVED":
             raise HTTPException(
                 status_code=400,
                 detail="Operations queue item is already resolved",
@@ -66,8 +100,20 @@ def update_operations_queue_status(
 
         raise HTTPException(
             status_code=400,
-            detail=str(exc),
+            detail=error_message,
         )
+
+    except Exception:
+        log_workflow_event(
+            workflow="operations_queue_status_update",
+            event="failed",
+            request=request,
+            entity_type="operations_queue",
+            entity_id=queue_id,
+            status=queue_status,
+            error_code="OPERATIONS_QUEUE_STATUS_UPDATE_FAILED",
+        )
+        raise
 
     response_data = {
         "queue_id": result.queue_id,
@@ -77,6 +123,15 @@ def update_operations_queue_status(
         "queue_status": result.queue_status,
         "reason": result.reason,
     }
+
+    log_workflow_event(
+        workflow="operations_queue_status_update",
+        event="completed",
+        request=request,
+        entity_type="operations_queue",
+        entity_id=queue_id,
+        status=result.queue_status,
+    )
 
     return success_response(
         request=request,

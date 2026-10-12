@@ -4,7 +4,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.workflow_logging import log_workflow_event
+from backend.app.core.responses import success_response
+
 from backend.app.database import get_db
+
 from backend.app.schemas.collection import (
     CollectionCreateRequest,
     CollectionResponse,
@@ -14,7 +18,7 @@ from backend.app.schemas.collection import (
     ApplicationOverdueSummaryResponse,
 )
 from backend.app.schemas.common import ApiResponse
-from backend.app.core.responses import success_response
+
 from backend.app.services.collection_service import collection_service
 from backend.app.services.overdue_service import overdue_service
 
@@ -39,6 +43,15 @@ def create_collection(
     db: Session = Depends(get_db),
 ):
     try:
+        log_workflow_event(
+            workflow="collection_creation",
+            event="started",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+        )
+
         collection = collection_service.create_collection(
             db=db,
             collection_id=f"COLL-{request.repayment_schedule_id[-12:]}",
@@ -60,6 +73,15 @@ def create_collection(
             collection
         )
 
+        log_workflow_event(
+            workflow="collection_creation",
+            event="completed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+        )
+
         return success_response(
             request=api_request,
             data=response_data,
@@ -67,11 +89,16 @@ def create_collection(
         )
 
     except ValueError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
+        log_workflow_event(
+            workflow="collection_creation",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+            error_code="COLLECTION_CREATION_UNEXPECTED_FAILURE",
         )
+        raise
 
 
 # ============================================================
@@ -88,6 +115,15 @@ def record_collection(
     db: Session = Depends(get_db),
 ):
     try:
+        log_workflow_event(
+            workflow="collection_recording",
+            event="started",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+        )
+
         collection = collection_service.record_collection(
             db=db,
             collection_id=f"COLL-{request.repayment_schedule_id[-12:]}",
@@ -105,6 +141,15 @@ def record_collection(
             collection
         )
 
+        log_workflow_event(
+            workflow="collection_recording",
+            event="completed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+        )
+
         return success_response(
             request=api_request,
             data=response_data,
@@ -112,11 +157,17 @@ def record_collection(
         )
 
     except ValueError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
+        log_workflow_event(
+            workflow="collection_recording",
+            event="failed",
+            request=api_request,
+            application_id=request.application_id,
+            entity_type="collection",
+            entity_id=f"COLL-{request.repayment_schedule_id[-12:]}",
+            error_code="COLLECTION_RECORDING_UNEXPECTED_FAILURE",
         )
+        raise
+    
 
 # ============================================================
 # Get Overdue Schedules

@@ -2,11 +2,16 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
+import logging
+from functools import wraps
 
 from backend.app.database import get_db
+
 from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.underwriting import UnderwritingResult, UnderwritingDecisionResponse
+from backend.app.schemas.common import ApiResponse
+
 from backend.app.services.credit_decision_service import credit_decision_service
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
 from backend.app.services.manual_review_service import manual_review_service
@@ -26,19 +31,79 @@ from backend.app.models.loan_application import LoanApplication
 from backend.app.models.customer import Customer
 
 from backend.app.core.responses import success_response
-from backend.app.schemas.common import ApiResponse
+from backend.app.core.request_context import get_request_id
+from backend.app.core.workflow_logging import log_workflow_event
 
 
 router = APIRouter(
     prefix="/underwriting",
     tags=["AI Credit Underwriting"],
 )
+logger = logging.getLogger("backend.workflow")
+
+def log_underwriting_lifecycle(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        application = kwargs.get("application")
+        if application is None and args:
+            application = args[0]
+
+        request = kwargs.get("request")
+        if request is None and len(args) >= 3:
+            request = args[2]
+
+        application_id = getattr(
+            application,
+            "application_id",
+            None,
+        )
+
+        if request is None or not application_id:
+            return func(*args, **kwargs)
+
+        log_workflow_event(
+            workflow="credit_underwriting_evaluation",
+            event="started",
+            request=request,
+            application_id=application_id,
+            entity_type="credit_underwriting",
+            entity_id=application_id,
+        )
+
+        try:
+            response = func(*args, **kwargs)
+        except Exception:
+            log_workflow_event(
+                workflow="credit_underwriting_evaluation",
+                event="failed",
+                request=request,
+                application_id=application_id,
+                entity_type="credit_underwriting",
+                entity_id=application_id,
+                error_code="UNDERWRITING_EVALUATION_FAILED",
+            )
+            raise
+
+        log_workflow_event(
+            workflow="credit_underwriting_evaluation",
+            event="completed",
+            request=request,
+            application_id=application_id,
+            entity_type="credit_underwriting",
+            entity_id=application_id,
+            status="COMPLETED",
+        )
+
+        return response
+
+    return wrapper
 
 
 @router.post(
     "/evaluate",
     response_model=ApiResponse[UnderwritingResult],
 )
+@log_underwriting_lifecycle
 def evaluate_application(
     application: ApplicationCreate,
     borrower: Borrower360,
@@ -91,6 +156,13 @@ def evaluate_application(
             detail=str(exc),
         )
 
+    logger.info(
+        "underwriting_started request_id=%s application_id=%s customer_id=%s",
+        get_request_id(request),
+        application.application_id,
+        application.customer_id,
+    )
+
     result = underwriting_pipeline.process(
         application=application,
         borrower=borrower,
@@ -102,6 +174,7 @@ def evaluate_application(
         saved_decision = credit_decision_service.save_decision(
             db=db,
             decision=result.decision,
+            commit=False,
         )
 
         feature_snapshot = underwriting_feature_snapshot_service.create_snapshot(
@@ -181,6 +254,7 @@ def evaluate_application(
             decision_metadata={
                 "feature_version": feature_snapshot.feature_version,
             },
+            commit=False,
         )
 
         audit_log_service.log(
@@ -194,7 +268,7 @@ def evaluate_application(
             description="Material underwriting feature snapshot created.",
             previous_state=None,
             new_state="CREATED",
-            request_reference=result.decision.application_id,
+            request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
         )
@@ -210,7 +284,7 @@ def evaluate_application(
             description="Credit risk model assessment completed.",
             previous_state=None,
             new_state="COMPLETED",
-            request_reference=result.decision.application_id,
+            request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
         )
@@ -229,7 +303,7 @@ def evaluate_application(
             ),
             previous_state=None,
             new_state=result.decision.decision,
-            request_reference=result.decision.application_id,
+            request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
         )
@@ -245,7 +319,7 @@ def evaluate_application(
             description="Complete underwriting decision trace created.",
             previous_state=None,
             new_state="CREATED",
-            request_reference=result.decision.application_id,
+            request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
         )
@@ -262,9 +336,6 @@ def evaluate_application(
                 "REJECT": "REJECTED",
             }[result.decision.decision]
 
-            db.commit()
-            db.refresh(application_record)
-
         audit_log_service.log(
             db=db,
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
@@ -279,7 +350,7 @@ def evaluate_application(
             ),
             previous_state="UNDERWRITING_PENDING",
             new_state=result.decision.decision,
-            request_reference=result.decision.application_id,
+            request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
         )
@@ -289,6 +360,7 @@ def evaluate_application(
                 db=db,
                 application_id=application.application_id,
                 review_reason=", ".join(result.decision.reason_codes),
+                commit=False,
             )
 
             audit_log_service.log(
@@ -305,7 +377,7 @@ def evaluate_application(
                 ),
                 previous_state="REFER",
                 new_state="OPEN",
-                request_reference=result.decision.application_id,
+                request_reference=get_request_id(request),
                 model_version=result.decision.model_version,
                 policy_version=result.decision.policy_version,
             )
@@ -335,12 +407,23 @@ def evaluate_application(
                 ),
                 previous_state="REFER",
                 new_state="OPEN",
-                request_reference=result.decision.application_id,
+                request_reference=get_request_id(request),
                 model_version=result.decision.model_version,
                 policy_version=result.decision.policy_version,
             )
 
-            db.commit()
+        db.commit()
+        
+        if application_record is not None:
+                db.refresh(application_record)
+
+
+    logger.info(
+        "underwriting_completed request_id=%s application_id=%s decision=%s",
+        get_request_id(request),
+        application.application_id,
+        result.decision.decision if result.decision is not None else "NOT_GENERATED",
+    )
             
     response_data = UnderwritingResult.model_validate(result)
 
@@ -349,6 +432,7 @@ def evaluate_application(
         data=response_data,
         message="Underwriting evaluation completed successfully.",
     )
+
 
 @router.get(
     "/{application_id}",

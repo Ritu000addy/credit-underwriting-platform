@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.workflow_logging import log_workflow_event
 from backend.app.core.security import (
     create_access_token,
     get_current_user,
@@ -36,38 +37,77 @@ def login(
     request: Request = None,
     db: Session = Depends(get_db),
 ):
-    user = auth_user_service.authenticate_user(
+    log_workflow_event(
+        workflow="authentication_login",
+        event="started",
+        request=request,
+        entity_type="auth_attempt",
+    )
+
+    try:
+        user = auth_user_service.authenticate_user(
         db=db,
         username=form_data.username,
         password=form_data.password,
     )
 
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="INVALID_USERNAME_OR_PASSWORD",
-            headers={
-                "WWW-Authenticate": "Bearer"
-            },
+        if user is None:
+            log_workflow_event(
+                workflow="authentication_login",
+                event="failed",
+                request=request,
+                entity_type="auth_attempt",
+                error_code="INVALID_USERNAME_OR_PASSWORD",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="INVALID_USERNAME_OR_PASSWORD",
+                headers={
+                    "WWW-Authenticate": "Bearer"
+                },
+            )
+
+        user.last_login_at = datetime.utcnow()
+        db.commit()
+
+        access_token = create_access_token(
+            user_id=user.user_id
         )
 
-    user.last_login_at = datetime.utcnow()
-    db.commit()
+        response_data = TokenResponse(
+            access_token=access_token,
+            token_type="bearer",
+        )
 
-    access_token = create_access_token(
-        user_id=user.user_id
-    )
+        response = success_response(
+            request=request,
+            data=response_data,
+            message="Login successful.",
+        )
+      
+        log_workflow_event(
+            workflow="authentication_login",
+            event="completed",
+            request=request,
+            entity_type="auth_user",
+            entity_id=user.user_id,
+            status="SUCCESS",
+        )
+        return response
 
-    response_data = TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-    )
+    except HTTPException:
+        raise
 
-    return success_response(
-        request=request,
-        data=response_data,
-        message="Login successful.",
-    )
+    except Exception:
+        db.rollback()
+        log_workflow_event(
+            workflow="authentication_login",
+            event="failed",
+            request=request,
+            entity_type="auth_attempt",
+            error_code="LOGIN_PROCESSING_FAILED",
+        )
+        raise
 
 
 @router.get(
