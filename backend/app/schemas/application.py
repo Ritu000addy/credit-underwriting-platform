@@ -19,6 +19,8 @@ class ApplicationResponse(BaseModel):
     customer_id: str
     product: str | None = None
     requested_amount: Decimal
+    loan_tenure_months: int | None = None
+    annual_interest_rate: Decimal | None = None
     status: str
     created_at: datetime
     updated_at: datetime

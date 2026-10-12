@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Index, CheckConstraint
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Index, CheckConstraint, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.app.models.base import Base
@@ -40,6 +40,16 @@ class LoanApplication(Base):
     requested_amount: Mapped[Decimal] = mapped_column(
         Numeric(15,2),
         nullable = False,
+    )
+
+    loan_tenure_months: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    annual_interest_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2),
+        nullable=True,
     )
 
     status: Mapped[str] = mapped_column(

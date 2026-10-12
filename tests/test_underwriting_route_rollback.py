@@ -49,6 +49,8 @@ def test_underwriting_route_rolls_back_when_refer_workflow_fails(
                 customer_id=customer_id,
                 product="SYNTHETIC_TEST",
                 requested_amount=Decimal("150000"),
+                loan_tenure_months=12,
+                annual_interest_rate=None,
                 status="SUBMITTED",
             )
         )

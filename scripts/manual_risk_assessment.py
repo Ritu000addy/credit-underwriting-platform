@@ -44,7 +44,7 @@ borrower = Borrower360(
         collections=[],
     ),
 
-    bank_cashflow=BankCashFlowData(
+    bank_cash_flow=BankCashFlowData(
         credits=80000,
         debits=45000,
         balance=120000,
@@ -52,7 +52,7 @@ borrower = Borrower360(
         bounce=0,
         transaction_count=120,
         income_pattern={
-            "trend": "STABLE"
+            "income_trend": "STABLE"
         },
     ),
 
@@ -65,6 +65,7 @@ borrower = Borrower360(
 result = risk_assessment_service.assess(
     application,
     borrower,
+    annual_interest_rate=Decimal("12"),
 )
 
 print(result.model_dump())

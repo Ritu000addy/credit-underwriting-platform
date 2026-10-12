@@ -38,7 +38,10 @@ class UnderwritingPipeline:
         
         # Stage 2: KYC
 
-        result.kyc = kyc_validator.validate(borrower)
+        result.kyc = kyc_validator.validate(
+            borrower,
+            kyc_config=policy_config.get("kyc_bank_validation", {}),            
+        )
 
         if result.kyc.status != "PASS":
             return result

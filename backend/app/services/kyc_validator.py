@@ -6,7 +6,20 @@ class KYCValidator:
     def validate(
         self,
         borrower: Borrower360,
+        kyc_config: dict | None = None,
     ) -> KYCCheckResult:
+
+        config = kyc_config or {}
+
+        pan_required = config.get("pan_required", True)
+        ekyc_required = config.get("ekyc_required", True)
+        required_ekyc_result = str(
+            config.get("required_ekyc_result", "VERIFIED")
+        ).strip().upper()
+        aadhaar_kyc_required = config.get(
+            "aadhaar_kyc_required",
+            False,
+        )
 
         checks: list[dict] = []
         reason_codes: list[str] = []
@@ -27,7 +40,7 @@ class KYCValidator:
                 reason_codes=["KYC_DATA_MISSING"],
             )
         
-        # PAN availability
+        # PAN: required according to the active policy.
         if kyc.pan:
             checks.append(
                 {
@@ -36,7 +49,7 @@ class KYCValidator:
                     "reason": "PAN information available",
                 }
             )
-        else:
+        elif pan_required:
             checks.append(
                 {
                     "check_id": "PAN",
@@ -45,28 +58,62 @@ class KYCValidator:
                 }
             )
             reason_codes.append("KYC_PAN_MISSING")
+        else:
+            checks.append({
+                "check_id": "PAN",
+                "status": "NOT_REQUIRED",
+                "reason": "PAN is not required by the active policy",
+            })
+
         
-        # e-KYC status
-        if kyc.ekyc_result:
+        # e-KYC: a provided result must match the configured result.
+        ekyc_result = (
+            kyc.ekyc_result.strip().upper()
+            if kyc.ekyc_result
+            else None
+        )
+
+        if ekyc_result == required_ekyc_result:
             checks.append(
                 {
                     "check_id": "EKYC",
                     "status": "PASS",
-                    "reason": "e-KYC result available",
+                    "reason": "Required e-KYC result verified",
                 }
             )
+        elif not ekyc_result and not ekyc_required:
+            checks.append({
+                "check_id": "EKYC",
+                "status": "NOT_REQUIRED",
+                "reason": "e-KYC is not required by the active policy",
+            })
         else:
             checks.append(
                 {
                     "check_id": "EKYC",
                     "status": "FAIL",
-                    "reason": "e-KYC result missing",
+                    "reason": (
+                        "e-KYC result missing"
+                        if not ekyc_result
+                        else "e-KYC result does not match the required result"
+                    ),
                 }
             )
-            reason_codes.append("KYC_EKYC_MISSING")
+            if not ekyc_result:
+                reason_codes.append("KYC_EKYC_MISSING")
+            elif ekyc_result == "PENDING":
+                reason_codes.append("KYC_EKYC_PENDING")
+            else:
+                reason_codes.append("KYC_EKYC_NOT_VERIFIED")
 
-        # Aadhaar KYC status
-        if kyc.aadhaar_kyc_status == "VERIFIED":
+        # Aadhaar: fail only when the active policy requires verification.
+        aadhaar_status = (
+            kyc.aadhaar_kyc_status.strip().upper()
+            if kyc.aadhaar_kyc_status
+            else None
+        )
+
+        if aadhaar_status == "VERIFIED":
             checks.append(
                 {
                     "check_id": "AADHAAR_KYC",
@@ -74,26 +121,30 @@ class KYCValidator:
                     "reason": "Aadhaar KYC verification passed",
                 }
             )
-        elif kyc.aadhaar_kyc_status == "PENDING":
-            checks.append(
-                {
-                    "check_id": "AADHAAR_KYC",
-                    "status": "FAIL",
-                    "reason": "Aadhaar KYC verification is pending",
-                }
-            )
-            reason_codes.append("KYC_AADHAAR_PENDING")
+        elif not aadhaar_kyc_required:
+            checks.append({
+                "check_id": "AADHAAR_KYC",
+                "status": "NOT_REQUIRED",
+                "reason": "Aadhaar KYC is not required by the active policy",
+            })
         else:
             checks.append(
                 {
                     "check_id": "AADHAAR_KYC",
                     "status": "FAIL",
-                    "reason": "Aadhaar KYC verification failed or is unavailable",
+                    "reason": (
+                        "Aadhaar KYC verification is pending"
+                        if aadhaar_status == "PENDING"
+                        else "Aadhaar KYC verification failed or is unavailable"
+                    ),
                 }
             )
-            reason_codes.append("KYC_AADHAAR_NOT_VERIFIED")
+            if aadhaar_status == "PENDING":
+                reason_codes.append("KYC_AADHAAR_PENDING")
+            else:
+                reason_codes.append("KYC_AADHAAR_NOT_VERIFIED")
 
-        # DOB
+        # DOB remains required by this validator.
         if kyc.dob:
             checks.append(
                 {
@@ -102,7 +153,6 @@ class KYCValidator:
                     "reason": "Date of birth available",
                 }
             )
-
         else:
             checks.append(
                 {
@@ -113,11 +163,8 @@ class KYCValidator:
             )
             reason_codes.append("KYC_DOB_MISSING")
     
-        # overall result
-        status = "PASS" if not reason_codes else "FAIL"
-
         return KYCCheckResult(
-            status = status,
+            status = "PASS" if not reason_codes else "FAIL",
             checks = checks,
             reason_codes = reason_codes,
         )

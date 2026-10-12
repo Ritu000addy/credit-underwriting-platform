@@ -36,6 +36,12 @@ class ApplicationService:
             customer_id=application.customer_id,
             product="UNSPECIFIED",
             requested_amount=Decimal(str(application.requested_amount)),
+            loan_tenure_months=application.loan_tenure_months,
+            annual_interest_rate=(
+                Decimal(str(application.annual_interest_rate))
+                if application.annual_interest_rate is not None
+                else None
+            ),
             status="RECEIVED",
         )
 

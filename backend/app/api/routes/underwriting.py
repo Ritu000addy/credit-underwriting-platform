@@ -12,6 +12,7 @@ from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.underwriting import UnderwritingResult, UnderwritingDecisionResponse
 from backend.app.schemas.common import ApiResponse
 
+from backend.app.services.borrower360_service import borrower360_service
 from backend.app.services.credit_decision_service import credit_decision_service
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
 from backend.app.services.manual_review_service import manual_review_service
@@ -145,6 +146,41 @@ def evaluate_application(
             detail="BORROWER_CUSTOMER_MISMATCH",
         )
 
+    # Build underwriting evidence from persisted platform records.
+    # Do not trust substantive borrower data submitted in the request.
+    persisted_borrower = borrower360_service.build(
+        db=db,
+        customer_id=application_record.customer_id,
+        application_id=application_record.application_id,
+    )
+
+        # Stored application terms are the source of truth.
+    if application_record.loan_tenure_months is None:
+        raise HTTPException(
+            status_code=409,
+            detail="APPLICATION_TERMS_NOT_PERSISTED",
+        )
+
+    if (
+        application.requested_amount != application_record.requested_amount
+        or application.loan_tenure_months
+        != application_record.loan_tenure_months
+        or application.annual_interest_rate
+        != application_record.annual_interest_rate
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="APPLICATION_TERMS_MISMATCH",
+        )
+
+    application_for_evaluation = ApplicationCreate(
+        application_id=application_record.application_id,
+        customer_id=application_record.customer_id,
+        requested_amount=application_record.requested_amount,
+        loan_tenure_months=application_record.loan_tenure_months,
+        annual_interest_rate=application_record.annual_interest_rate,
+    )
+
     try:
         policy_context = policy_version_service.get_policy_context(
             db=db,
@@ -164,8 +200,8 @@ def evaluate_application(
     )
 
     result = underwriting_pipeline.process(
-        application=application,
-        borrower=borrower,
+        application=application_for_evaluation,
+        borrower=persisted_borrower,
         policy_config=policy_context["policy_config"],
         policy_metadata=policy_context["policy_metadata"],
     )
