@@ -46,3 +46,30 @@ class DocumentIntelligenceResult(BaseModel):
         "Model-reported confidence is not calibrated probability "
         "and does not constitute document verification."
     )
+
+class DocumentBankAnalysisAcceptance(BaseModel):
+    reviewer_id: str = Field(min_length=2, max_length=100)
+
+    # The caller must explicitly confirm the review.
+    confirmed: Literal[True]
+
+    accepted_fields: list[
+        Literal[
+            "monthly_credits",
+            "monthly_debits",
+            "average_balance",
+            "transaction_count",
+            "bounce_count",
+        ]
+    ] = Field(min_length=1)
+
+    # Required acknowledgements for conflicts in fields being accepted.
+    acknowledged_conflicts: list[
+        Literal[
+            "monthly_credits",
+            "monthly_debits",
+            "average_balance",
+            "transaction_count",
+            "bounce_count",
+        ]
+    ] = Field(default_factory=list)

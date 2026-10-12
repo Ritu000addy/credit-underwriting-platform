@@ -1,3 +1,4 @@
+from urllib3.util import retry
 import json
 import re
 import uuid
@@ -136,20 +137,54 @@ class DocumentIntelligenceService:
         if source_value is None or existing_value is None:
             return True
 
-        # Compare monetary values to two decimal places.
-        try:
-            source_decimal = Decimal(str(source_value)).quantize(
-                Decimal("0.01")
-            )
-            existing_decimal = Decimal(str(existing_value)).quantize(
-                Decimal("0.01")
-            )
-            return source_decimal == existing_decimal
-        except (InvalidOperation, ValueError, TypeError):
-            return (
-                DocumentIntelligenceService._normalise_text(str(source_value))
-                == DocumentIntelligenceService._normalise_text(str(existing_value))
-            )
+        def parse_number(value):
+            if isinstance(value, bool):
+                return None
+
+            if isinstance(value, (int, float, Decimal)):
+                try:
+                    number = Decimal(str(value))
+                    return number if number.is_finite() else None
+                except (InvalidOperation, ValueError):
+                    return None
+            
+            if isinstance(value, str):
+                # Remove common currency symbols and commas
+                cleaned = value.strip().replace(",", "")
+                cleaned = cleaned.replace("₹", "")
+                cleaned = re.sub(
+                    r"(?i)\bINR\b",
+                    "",
+                    cleaned,
+                )
+                cleaned = re.sub(
+                    r"(?i)\bRS\.?\s*",
+                    "",
+                    cleaned,
+                ).strip()
+
+                if re.fullmatch(
+                    r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)",
+                    cleaned,
+                ):
+                    try:
+                        number = Decimal(cleaned)
+                        return number if number.is_finite() else None
+                    except InvalidOperation:
+                        return None
+
+            return None
+                
+        source_number = parse_number(source_value)
+        existing_number = parse_number(existing_value)
+
+        if source_number is not None and existing_number is not None:
+            return source_number == existing_number
+
+        return (
+            DocumentIntelligenceService._normalise_text(str(source_value))
+            == DocumentIntelligenceService._normalise_text(str(existing_value))
+        )
 
     def _build_prompt(
         self,
@@ -396,7 +431,11 @@ Document content, encoded as a JSON string:
         prompt = self._build_prompt(document_type, source_text)
 
         try:
-            raw_response = genai_provider.generate(prompt)
+            raw_response = genai_provider.generate(
+                prompt,
+                max_output_tokens=600,
+            )
+
         except Exception as exc:
             # Preserve the provider error code while preventing source text
             # or sensitive document content from entering workflow logs.

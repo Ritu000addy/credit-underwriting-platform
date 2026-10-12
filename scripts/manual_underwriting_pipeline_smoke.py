@@ -1,9 +1,16 @@
 from decimal import Decimal
+from datetime import datetime
+
+from backend.app.database import get_db
 
 from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
 
 from backend.app.services.underwriting_pipeline import underwriting_pipeline
+from backend.app.services.policy_version_service import (
+    policy_version_service,
+)
+
 
 application = ApplicationCreate(
     application_id="APP001",
@@ -18,7 +25,7 @@ borrower = Borrower360(
 
     kyc = {
         "pan": "ABCDE1234F",
-        "aadhaar": "123456789012",
+        "aadhaar_kyc_status": "VERIFIED",
         "ekyc_result": "VERIFIED",
         "dob": "1993-03-01",
         "address": "Pune",
@@ -98,9 +105,24 @@ borrower = Borrower360(
     },
 )
 
-result = underwriting_pipeline.process(
-    application=application,
-    borrower=borrower,
-)
 
-print(result.model_dump())
+db_generator = get_db()
+db = next(db_generator)
+
+try:
+    policy_context = policy_version_service.get_policy_context(
+        db=db,
+        as_of=datetime.utcnow(),
+    )
+
+    result = underwriting_pipeline.process(
+        application=application,
+        borrower=borrower,
+        policy_config=policy_context["policy_config"],
+        policy_metadata=policy_context["policy_metadata"],
+    )
+
+    print(result.model_dump())
+
+finally:
+    db_generator.close()

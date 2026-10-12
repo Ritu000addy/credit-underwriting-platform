@@ -1,4 +1,5 @@
 import os
+import json
 
 from dotenv import load_dotenv
 import requests
@@ -56,12 +57,21 @@ class GenAIProvider:
     def generate(
         self,
         prompt: str,
+        max_output_tokens: int | None = None,
     ) -> str:
 
         if not prompt.strip():
             raise ValueError(
                 "GENAI_PROMPT_EMPTY"
             )
+
+        if max_output_tokens is not None:
+            if (
+                not isinstance(max_output_tokens, int)
+                or isinstance(max_output_tokens, bool)
+                or not 1 <= max_output_tokens <= 2048
+            ):
+                raise ValueError("GENAI_OUTPUT_TOKEN_LIMIT_INVALID")
 
         if self.provider == "MOCK":
             return self._generate_mock(prompt)
@@ -72,10 +82,16 @@ class GenAIProvider:
             )
 
         if self.provider == "OPENAI":
-            return self._generate_openai(prompt)
+            return self._generate_openai(
+                prompt,
+                max_output_tokens=max_output_tokens,
+            )
 
         if self.provider == "OLLAMA":
-            return self._generate_ollama(prompt)
+            return self._generate_ollama(
+                prompt,
+                max_output_tokens=max_output_tokens,
+            )
 
         raise RuntimeError(
             f"GENAI_PROVIDER_UNSUPPORTED: {self.provider}"
@@ -96,6 +112,39 @@ class GenAIProvider:
 
         if os.getenv("GENAI_MOCK_TEST_CASE") == "GENERATION_FAILURE":
             raise RuntimeError("MOCK_GENERATION_FAILURE")
+
+        # Document-extraction requests use a different response schema
+        # from underwriting narrative requests.
+        if "Allowed field names:" in prompt:
+            try:
+                field_block = prompt.split(
+                    "Allowed field names:\n", 1
+                )[1].split(
+                    "\n\nRequired fields", 1
+                )[0]
+
+                allowed_fields = json.loads(field_block)
+
+                if not isinstance(allowed_fields, list):
+                    raise ValueError("Invalid document field list")
+
+                return json.dumps(
+                    {
+                        "fields": {
+                            field_name: {
+                                "value": None,
+                                "confidence": 0.0,
+                                "evidence": None,
+                            }
+                            for field_name in allowed_fields
+                        }
+                    }
+                )
+
+            except (IndexError, json.JSONDecodeError, ValueError) as exc:
+                raise RuntimeError(
+                    "MOCK_DOCUMENT_EXTRACTION_PROMPT_INVALID"
+                ) from exc
     
         return """
 {
@@ -113,6 +162,7 @@ class GenAIProvider:
     def _generate_openai(
         self,
         prompt: str,
+        max_output_tokens: int | None = None,
     ) -> str:
         
         url = self.base_url or "https://api.openai.com/v1/chat/completions"
@@ -140,6 +190,9 @@ class GenAIProvider:
             ],
             "temperature": 0.1,
         }
+
+        if max_output_tokens is not None:
+            payload["max_tokens"] = max_output_tokens
 
         try:
             response = requests.post(
@@ -174,7 +227,11 @@ class GenAIProvider:
                 "GENAI_PROVIDER_INVALID_RESPONSE"
             ) from exc
         
-    def _generate_ollama(self, prompt: str) -> str:
+    def _generate_ollama(
+        self, 
+        prompt: str,
+        max_output_tokens: int | None = None,
+    ) -> str:
         url = self.base_url or "http://localhost:11434/api/chat"
 
         payload = {
@@ -199,7 +256,11 @@ class GenAIProvider:
             "stream": False,
             "options": {
                 "temperature": 0.1, 
-                "num_predict": 180,
+                "num_predict": (
+                    max_output_tokens
+                    if max_output_tokens is not None
+                    else 180
+                ),
                 "num_ctx": 4096,
             },
         }
