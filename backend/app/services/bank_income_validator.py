@@ -29,6 +29,24 @@ class BankIncomeValidator:
                 reason_codes=["BANK_DATA_MISSING"],
             )
 
+        verification_status = (
+            (bank.verification_status or "").strip().upper()
+        )
+
+        if verification_status == "VERIFIED":
+            bank_cash_flow_checks.append({
+                "check_id": "BANK_VERIFICATION",
+                "status": "PASS",
+                "reason": "Bank analysis is verified",
+            })
+        else:
+            bank_cash_flow_checks.append({
+                "check_id": "BANK_VERIFICATION",
+                "status": "FAIL",
+                "reason": "Bank analysis is not verified",
+            })
+            reason_codes.append("BANK_DATA_NOT_VERIFIED")
+
         if bank.credits is not None:
             bank_cash_flow_checks.append(
                 {

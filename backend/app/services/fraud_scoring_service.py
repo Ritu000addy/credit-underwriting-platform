@@ -13,118 +13,67 @@ class FraudScoringService:
         rule_results: list[FraudRuleResult],
     ) -> FraudScoreResult:
 
+        del features  # The score is based on evaluated rule outcomes.
+
         # --------------------------------------------------
         # Count rule outcomes
         # --------------------------------------------------
 
         fail_count = sum(
-            1
+            rule.status == "FAIL"
             for rule in rule_results
-            if rule.status == "FAIL"
         )
 
         pass_count = sum(
-            1
+            rule.status == "PASS"
             for rule in rule_results
-            if rule.status == "PASS"
         )
 
-        not_evaluated_count = sum(
-            1
+        incomplete_count = sum(
+            rule.status in {"NOT_EVALUATED", "EXCEPTION"}
             for rule in rule_results
-            if rule.status == "NOT_EVALUATED"
         )
 
         total_rules = len(rule_results)
+        reason_codes: list[str] = []
 
-        # --------------------------------------------------
-        # Development fraud score
-        #
-        # 0   = lowest observed fraud risk
-        # 100 = highest observed fraud risk
-        # --------------------------------------------------
+        for rule in rule_results:
+            if rule.status == "FAIL":
+                reason_codes.append(f"FRAUD_{rule.rule_id}")
+            elif rule.status in {"NOT_EVALUATED", "EXCEPTION"}:
+                reason_codes.append(f"FRAUD_DATA_{rule.rule_id}")
 
         if total_rules == 0:
+            return FraudScoreResult(
+                fraud_score=None,
+                risk_level=None,
+                confidence=None,
+                reason_codes=reason_codes,
+            )
 
+        evaluated_rules = pass_count + fail_count
+        confidence = Decimal(
+            str(round(evaluated_rules / total_rules, 4))
+        )
+
+        # No observed failures is not the same as a clean result
+        # when one or more checks could not be evaluated.
+        if fail_count == 0 and incomplete_count > 0:
             fraud_score = None
             risk_level = None
-            confidence = None
-            reason_codes = []
-
         else:
-
-            # Each failed fraud rule contributes to the score.
             fraud_score = Decimal(
-                str(
-                    min(
-                        100,
-                        fail_count * 25,
-                    )
-                )
+                str(min(100, fail_count * 25))
             )
-
-            # --------------------------------------------------
-            # Risk level
-            # --------------------------------------------------
 
             if fraud_score >= 75:
-
                 risk_level = "HIGH"
-
             elif fraud_score >= 50:
-
                 risk_level = "MEDIUM"
-
             elif fraud_score >= 25:
-
                 risk_level = "LOW"
-
             else:
-
                 risk_level = "VERY_LOW"
-
-            # --------------------------------------------------
-            # Confidence
-            # --------------------------------------------------
-
-            evaluated_rules = (
-                pass_count + fail_count
-            )
-
-            if evaluated_rules > 0:
-
-                confidence = Decimal(
-                    str(
-                        round(
-                            evaluated_rules / total_rules,
-                            4,
-                        )
-                    )
-                )
-
-            else:
-
-                confidence = Decimal("0")
-
-            # --------------------------------------------------
-            # Reason codes
-            # --------------------------------------------------
-
-            reason_codes = []
-
-            for rule in rule_results:
-
-                if rule.status == "FAIL":
-
-                    reason_codes.append(
-                        f"FRAUD_{rule.rule_id}"
-                    )
-
-                elif rule.status == "NOT_EVALUATED":
-
-                    reason_codes.append(
-                        f"FRAUD_DATA_{rule.rule_id}"
-                    )
 
         return FraudScoreResult(
             fraud_score=fraud_score,

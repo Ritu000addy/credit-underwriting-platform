@@ -20,3 +20,4 @@ class BureauReportResponse(BureauReportCreate):
 
     bureau_report_id: str
     fetched_at: datetime
+    verification_status: str

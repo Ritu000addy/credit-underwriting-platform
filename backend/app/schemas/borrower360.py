@@ -20,6 +20,7 @@ class CreditBureauData(BaseModel):
     active_loans: int | None = None
     total_outstanding: Decimal | None = None
     write_offs: Decimal | None = None
+    verification_status: str | None = None
 
 class BankCashFlowData(BaseModel):
     credits: Decimal | None = None
@@ -29,6 +30,7 @@ class BankCashFlowData(BaseModel):
     bounce: int | None = None
     transaction_count: int | None = None
     income_pattern: dict[str, Any] | None = None
+    verification_status: str | None = None
 
 class EmploymentBusinessData(BaseModel):
     salary: Decimal | None = None

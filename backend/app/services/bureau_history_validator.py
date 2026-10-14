@@ -28,6 +28,24 @@ class BureauHistoryValidator:
                 internal_history_checks=[],
                 reason_codes=["BUREAU_DATA_MISSING"],
             )
+
+        verification_status = (
+            (bureau.verification_status or "").strip().upper()
+        )
+
+        if verification_status == "VERIFIED":
+            bureau_checks.append({
+                "check_id": "BUREAU_VERIFICATION",
+                "status": "PASS",
+                "reason": "Bureau report is verified",
+            })
+        else:
+            bureau_checks.append({
+                "check_id": "BUREAU_VERIFICATION",
+                "status": "FAIL",
+                "reason": "Bureau report is not verified",
+            })
+            reason_codes.append("BUREAU_DATA_NOT_VERIFIED")
         
         if bureau.score is not None:
             bureau_checks.append(

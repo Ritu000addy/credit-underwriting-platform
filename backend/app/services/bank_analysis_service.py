@@ -14,6 +14,7 @@ class BankAnalysisService:
         self,
         db: Session,
         analysis: BankAnalysisCreate,
+        commit: bool = True,
     ) -> BankAnalysis:
 
         application = db.get(
@@ -36,11 +37,15 @@ class BankAnalysisService:
             income_trend=analysis.income_trend,
             analysis_reference=analysis.analysis_reference,
             analyzed_at=datetime.utcnow(),
+            verification_status="UNVERIFIED",
         )
 
         db.add(bank_analysis)
-        db.commit()
-        db.refresh(bank_analysis)
+        if commit:
+            db.commit()
+            db.refresh(bank_analysis)
+        else:
+            db.flush()
 
         return bank_analysis
 

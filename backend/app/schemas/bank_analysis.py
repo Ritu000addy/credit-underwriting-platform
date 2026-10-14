@@ -23,3 +23,4 @@ class BankAnalysisResponse(BankAnalysisCreate):
 
     bank_analysis_id: str
     analyzed_at: datetime
+    verification_status: str

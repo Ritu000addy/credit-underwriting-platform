@@ -1,7 +1,10 @@
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+
+from starlette.requests import Request
 
 from backend.app.api.routes.disbursements import create_disbursement
 from backend.app.api.routes.underwriting import evaluate_application
@@ -141,6 +144,9 @@ def test_application_customer_mismatch_returns_400():
         evaluate_application(
             application=application,
             borrower=borrower,
+            request=build_test_request(
+                path="/underwriting/evaluate",
+            ),
             db=db,
         )
 
@@ -171,6 +177,9 @@ def test_borrower_customer_mismatch_returns_400():
         evaluate_application(
             application=application,
             borrower=borrower,
+            request=build_test_request(
+                path="/underwriting/evaluate",
+            ),
             db=db,
         )
 
@@ -191,11 +200,14 @@ def build_disbursement_request(amount=50000):
 
 def build_existing_disbursement(amount=50000):
     return SimpleNamespace(
+        disbursement_id="DISB-TEST-001",
         application_id="APP-001",
         sanction_id="SAN-001",
         disbursement_amount=amount,
         beneficiary_reference="BEN-001",
         payment_provider="TEST-BANK",
+        status="CREATED",
+        initiated_at=datetime.now(timezone.utc),
     )
 
 
@@ -215,6 +227,9 @@ def test_idempotency_key_payload_mismatch_returns_409():
     with pytest.raises(HTTPException) as exc:
         create_disbursement(
             disbursement=request,
+            request=build_test_request(
+                path="/disbursements",
+            ),
             db=db,
         )
 
@@ -240,10 +255,18 @@ def test_idempotency_same_payload_returns_existing_record():
 
     result = create_disbursement(
         disbursement=request,
+        request=build_test_request(
+            path="/disbursements",
+        ),
         db=db,
     )
 
-    assert result is existing
+    assert result.success is True
+    assert result.message == (
+        "Existing disbursement returned for idempotent request."
+    )
+    assert result.data.disbursement_id == "DISB-TEST-001"
+    assert result.data.status == "CREATED"
 
 def test_underwriting_missing_application_returns_404():
     application = ApplicationCreate(
@@ -264,6 +287,9 @@ def test_underwriting_missing_application_returns_404():
         evaluate_application(
             application=application,
             borrower=borrower,
+            request=build_test_request(
+                path="/underwriting/evaluate",
+            ),
             db=db,
         )
 
@@ -292,6 +318,9 @@ def test_underwriting_missing_customer_returns_404():
         evaluate_application(
             application=application,
             borrower=borrower,
+            request=build_test_request(
+                path="/underwriting/evaluate",
+            ),
             db=db,
         )
 
@@ -363,3 +392,23 @@ def test_collection_invalid_initial_status_is_rejected():
             days_past_due=0,
             status="INVALID",
         )
+
+
+def build_test_request(
+    method="POST",
+    path="/",
+):
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": method,
+            "scheme": "http",
+            "path": path,
+            "raw_path": path.encode(),
+            "query_string": b"",
+            "headers": [],
+            "client": ("testclient", 50000),
+            "server": ("testserver", 80),
+        }
+    )

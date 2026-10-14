@@ -1,5 +1,6 @@
 from backend.app.schemas.application import ApplicationCreate
 from backend.app.schemas.borrower360 import Borrower360
+from backend.app.schemas.credit_decision import CreditDecisionOutput
 from backend.app.schemas.underwriting import UnderwritingResult
 
 from backend.app.services.completeness_checker import completeness_checker
@@ -12,6 +13,31 @@ from backend.app.services.risk_assessment_service import risk_assessment_service
 from backend.app.services.decision_orchestrator import decision_orchestrator
 
 class UnderwritingPipeline:
+
+    @staticmethod
+    def _set_evidence_review_decision(
+        result: UnderwritingResult,
+        application: ApplicationCreate,
+        policy_metadata: dict,
+        reason_codes: list[str],
+    ) -> None:
+        codes = list(dict.fromkeys(
+            code for code in reason_codes if code
+        ))
+
+        if not codes:
+            codes = ["UNDERWRITING_EVIDENCE_REVIEW_REQUIRED"]
+
+        result.decision = CreditDecisionOutput(
+            application_id=application.application_id,
+            decision="REFER",
+            reason_codes=codes,
+            model_version=None,
+            model_features=None,
+            policy_version=policy_metadata["policy_version"],
+            effective_from=policy_metadata["effective_from"],
+            effective_to=policy_metadata.get("effective_to"),
+        )
 
     def process(
         self,
@@ -34,6 +60,20 @@ class UnderwritingPipeline:
         )
 
         if result.completeness.status != "COMPLETE":
+            missing_codes = [
+                f"REQUIRED_DATA_MISSING_{field.upper()}"
+                for field in result.completeness.missing_fields
+            ]
+
+            self._set_evidence_review_decision(
+                result,
+                application,
+                policy_metadata,
+                [
+                    "APPLICATION_DATA_INCOMPLETE",
+                    *missing_codes,
+                ],
+            )
             return result
         
         # Stage 2: KYC
@@ -44,6 +84,15 @@ class UnderwritingPipeline:
         )
 
         if result.kyc.status != "PASS":
+            self._set_evidence_review_decision(
+                result,
+                application,
+                policy_metadata,
+                [
+                    "KYC_REVIEW_REQUIRED",
+                    *result.kyc.reason_codes,
+                ],
+            )
             return result
         
         # Stage 3: Bureau + History
@@ -53,7 +102,17 @@ class UnderwritingPipeline:
         )
 
         if result.bureau_history.status != "PASS":
+            self._set_evidence_review_decision(
+                result,
+                application,
+                policy_metadata,
+                [
+                    "BUREAU_HISTORY_REVIEW_REQUIRED",
+                    *result.bureau_history.reason_codes,
+                ],
+            )
             return result
+        
         
         # Stage 4: Bank + Income
 
@@ -62,6 +121,15 @@ class UnderwritingPipeline:
         )
 
         if result.bank_income.status != "PASS":
+            self._set_evidence_review_decision(
+                result,
+                application,
+                policy_metadata,
+                [
+                    "BANK_INCOME_REVIEW_REQUIRED",
+                    *result.bank_income.reason_codes,
+                ],
+            )
             return result
         
         # Stage 5: Fraud Screening
@@ -70,7 +138,16 @@ class UnderwritingPipeline:
             borrower
         )
 
-        if result.fraud.status != "PASS":
+        if result.fraud.status == "FAIL":
+            self._set_evidence_review_decision(
+                result,
+                application,
+                policy_metadata,
+                [
+                    "FRAUD_SCREENING_REVIEW_REQUIRED",
+                    *result.fraud.reason_codes,
+                ],
+            )
             return result
 
         # Stage 6: Risk Assessement

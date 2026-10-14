@@ -30,9 +30,13 @@ def make_request():
 class FakeDB:
     def __init__(self, disbursement):
         self.disbursement = disbursement
+        self.commit_count = 0
 
     def get(self, model, entity_id):
         return self.disbursement
+
+    def commit(self):
+        self.commit_count += 1
 
 
 def setup_test(monkeypatch, status="INITIATED"):

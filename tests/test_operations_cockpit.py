@@ -67,7 +67,7 @@ def test_operations_dashboard_and_application_queue():
         "Operations dashboard",
     )
 
-    dashboard = dashboard_response.json()
+    dashboard = dashboard_response.json()["data"]
 
     assert "generated_at" in dashboard
     assert "applications" in dashboard
@@ -93,7 +93,7 @@ def test_operations_dashboard_and_application_queue():
         "Operations application queue",
     )
 
-    queue = application_queue_response.json()
+    queue = application_queue_response.json()["data"]
 
     assert queue["total"] == 1
     assert len(queue["items"]) == 1
@@ -154,7 +154,7 @@ def test_operations_application_detail():
         "Operations application detail",
     )
 
-    detail = detail_response.json()
+    detail = detail_response.json()["data"]
 
     assert detail["application_id"] == application_id
     assert detail["customer_id"] == customer_id
@@ -178,7 +178,7 @@ def test_operations_read_only_queues():
             f"Operations queue {endpoint}",
         )
 
-        assert isinstance(
-            response.json(),
-            list,
-        )
+        body = response.json()
+
+        assert body["success"] is True
+        assert isinstance(body["data"], list)

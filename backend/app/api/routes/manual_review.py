@@ -6,14 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.security import require_roles
 from backend.app.core.request_context import get_request_id
 
 from backend.app.database import get_db
 
+from backend.app.models.auth_user import AuthUser
 from backend.app.models.credit_decision import CreditDecision
 from backend.app.models.loan_application import LoanApplication
 
 from backend.app.schemas.common import ApiResponse
+from backend.app.schemas.credit_decision import CreditDecisionOutput
 from backend.app.schemas.manual_review import (
     ManualReviewCheckerDecision,
     ManualReviewCreate,
@@ -24,6 +27,12 @@ from backend.app.schemas.manual_review import (
 )
 
 from backend.app.services.audit_log_service import audit_log_service
+from backend.app.services.credit_decision_service import (
+    credit_decision_service,
+)
+from backend.app.services.decision_trace_service import (
+    decision_trace_service,
+)
 from backend.app.services.manual_review_history_service import (
     manual_review_history_service,
 )
@@ -33,6 +42,32 @@ from backend.app.services.manual_review_service import manual_review_service
 router = APIRouter(
     prefix="/manual-review",
     tags=["Manual Credit Review"],
+)
+
+MANUAL_REVIEW_CREATE_ROLES = (
+    "ADMIN",
+    "CREDIT_ANALYST",
+    "CREDIT_OFFICER",
+    "RISK",
+)
+
+MANUAL_REVIEW_MAKER_ROLES = (
+    "ADMIN",
+    "CREDIT_ANALYST",
+    "RISK",
+)
+
+MANUAL_REVIEW_CHECKER_ROLES = (
+    "ADMIN",
+    "CREDIT_OFFICER",
+)
+
+MANUAL_REVIEW_READ_ROLES = (
+    "ADMIN",
+    "CREDIT_ANALYST",
+    "CREDIT_OFFICER",
+    "RISK",
+    "AUDITOR",
 )
 
 logger = logging.getLogger("backend.workflow")
@@ -88,6 +123,9 @@ def create_manual_review(
     review: ManualReviewCreate,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_CREATE_ROLES),
+    ),
 ):
     log_manual_review_event(
         logging.INFO,
@@ -111,8 +149,23 @@ def create_manual_review(
             action="REVIEW_CREATED",
             previous_status=None,
             new_status="OPEN",
-            actor_type="SYSTEM",
+            actor_type="USER",
             remarks=result.review_reason,
+        )
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=result.application_id,
+            actor_type="USER",
+            actor_reference=current_user.username,
+            action="MANUAL_REVIEW_CREATED",
+            entity_type="MANUAL_REVIEW",
+            entity_reference=result.review_id,
+            description="Manual review created by an authenticated user.",
+            previous_state=None,
+            new_state="OPEN",
+            request_reference=result.application_id,
         )
 
         db.commit()
@@ -186,6 +239,9 @@ def start_manual_review(
     start_request: ManualReviewStart,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_MAKER_ROLES),
+    ),
 ):
     log_manual_review_event(
         level=logging.INFO,
@@ -212,6 +268,12 @@ def start_manual_review(
             detail="Manual review not found.",
         )
 
+    if start_request.reviewer_id != current_user.username:
+        raise HTTPException(
+            status_code=403,
+            detail="REVIEWER_IDENTITY_MISMATCH",
+        )
+
     log_manual_review_event(
         logging.INFO,
         "started",
@@ -228,7 +290,7 @@ def start_manual_review(
         result = manual_review_service.start_review(
             db=db,
             review=review,
-            reviewer_id=start_request.reviewer_id,
+            reviewer_id=current_user.username,
         )
 
         manual_review_history_service.record(
@@ -239,8 +301,8 @@ def start_manual_review(
             previous_status=previous_status,
             new_status=result.review_status,
             actor_type="USER",
-            actor_reference=result.reviewer_id,
-            reviewer_id=result.reviewer_id,
+            actor_reference=current_user.username,
+            reviewer_id=current_user.username,
         )
 
         audit_log_service.log(
@@ -248,7 +310,7 @@ def start_manual_review(
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
             application_id=application_id,
             actor_type="USER",
-            actor_reference=result.reviewer_id,
+            actor_reference=current_user.username,
             action="MANUAL_REVIEW_STARTED",
             entity_type="MANUAL_REVIEW",
             entity_reference=result.review_id,
@@ -334,6 +396,9 @@ def submit_manual_review_recommendation(
     recommendation: ManualReviewRecommendation,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_MAKER_ROLES),
+    ),
 ):
     review = manual_review_service.get_review(
         db=db,
@@ -350,6 +415,12 @@ def submit_manual_review_recommendation(
         raise HTTPException(
             status_code=404,
             detail="Manual review not found.",
+        )
+
+    if recommendation.reviewer_id != current_user.username:
+        raise HTTPException(
+            status_code=403,
+            detail="REVIEWER_IDENTITY_MISMATCH",
         )
 
     if review.review_status != "IN_PROGRESS":
@@ -381,7 +452,7 @@ def submit_manual_review_recommendation(
         result = manual_review_service.submit_recommendation(
             db=db,
             review=review,
-            reviewer_id=recommendation.reviewer_id,
+            reviewer_id=current_user.username,
             reviewer_decision=recommendation.reviewer_decision,
             reviewer_remarks=recommendation.reviewer_remarks,
         )
@@ -394,8 +465,8 @@ def submit_manual_review_recommendation(
             previous_status=previous_status,
             new_status=result.review_status,
             actor_type="USER",
-            actor_reference=recommendation.reviewer_id,
-            reviewer_id=recommendation.reviewer_id,
+            actor_reference=current_user.username,
+            reviewer_id=current_user.username,
             reviewer_decision=recommendation.reviewer_decision,
             remarks=recommendation.reviewer_remarks,
         )
@@ -405,7 +476,7 @@ def submit_manual_review_recommendation(
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
             application_id=application_id,
             actor_type="USER",
-            actor_reference=recommendation.reviewer_id,
+            actor_reference=current_user.username,
             action="MANUAL_REVIEW_RECOMMENDATION",
             entity_type="MANUAL_REVIEW",
             entity_reference=result.review_id,
@@ -494,6 +565,9 @@ def submit_manual_review_checker_decision(
     decision: ManualReviewCheckerDecision,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_CHECKER_ROLES),
+    ),
 ):
     review = manual_review_service.get_review(
         db=db,
@@ -512,6 +586,12 @@ def submit_manual_review_checker_decision(
             detail="Manual review not found.",
         )
 
+    if decision.checker_id.strip() != current_user.username:
+        raise HTTPException(
+            status_code=403,
+            detail="CHECKER_IDENTITY_MISMATCH",
+        )
+
     if review.review_status != "PENDING_CHECKER":
         log_manual_review_precondition_failure(
             request=request,
@@ -525,7 +605,7 @@ def submit_manual_review_checker_decision(
             detail="Manual review must be PENDING_CHECKER.",
         )
 
-    if review.reviewer_id == decision.checker_id.strip():
+    if review.reviewer_id == current_user.username:
         log_manual_review_precondition_failure(
             request=request,
             application_id=application_id,
@@ -617,12 +697,118 @@ def submit_manual_review_checker_decision(
         result = manual_review_service.submit_checker_decision(
             db=db,
             review=review,
-            checker_id=decision.checker_id,
+            checker_id=current_user.username,
             checker_decision=decision.checker_decision,
             checker_remarks=decision.checker_remarks,
         )
 
-        credit_decision.decision = decision.checker_decision
+                # Preserve the original automated underwriting decision (REFER).
+        # Record the checker outcome as a separate decision.
+
+        original_reason_codes = [
+            code.strip()
+            for code in (credit_decision.reason_codes or "").split(",")
+            if code.strip()
+        ]
+
+        checker_reason_code = (
+            f"MANUAL_REVIEW_CHECKER_{decision.checker_decision}"
+        )
+
+        final_reason_codes = original_reason_codes.copy()
+        if checker_reason_code not in final_reason_codes:
+            final_reason_codes.append(checker_reason_code)
+
+        final_decision_input = CreditDecisionOutput(
+            application_id=application_id,
+            credit_score=credit_decision.credit_score,
+            risk_grade=credit_decision.risk_grade,
+            probability_of_default=credit_decision.probability_of_default,
+            affordability_score=credit_decision.affordability_score,
+            repayment_propensity=credit_decision.repayment_propensity,
+            fraud_score=credit_decision.fraud_score,
+            income_stability_score=credit_decision.income_stability_score,
+            risk_segment=credit_decision.risk_segment,
+            recommended_amount=credit_decision.recommended_amount,
+            recommended_tenure=credit_decision.recommended_tenure,
+            recommended_emi=credit_decision.recommended_emi,
+            foir=credit_decision.foir,
+            decision=decision.checker_decision,
+            confidence=credit_decision.confidence,
+            reason_codes=final_reason_codes,
+            model_version=credit_decision.model_version,
+            policy_version=credit_decision.policy_version,
+            effective_from=credit_decision.effective_from,
+            effective_to=credit_decision.effective_to,
+        )
+
+        final_credit_decision = credit_decision_service.save_decision(
+            db=db,
+            decision=final_decision_input,
+            commit=False,
+            record_source="MANUAL_REVIEW_CHECKER",
+        )
+
+        # Reuse the original trace's evidence references and policy
+        # evaluation. Do not claim that the model or policy ran again.
+        original_trace = decision_trace_service.get_by_decision(
+            db=db,
+            decision_id=credit_decision.decision_id,
+        )
+
+        trace_metadata = (
+            dict(original_trace.decision_metadata or {})
+            if original_trace is not None
+            else {}
+        )
+
+        trace_metadata.update(
+            {
+                "decision_source": "MANUAL_REVIEW_CHECKER",
+                "original_decision_id": credit_decision.decision_id,
+                "original_decision": "REFER",
+                "manual_review_id": result.review_id,
+                "maker_id": result.reviewer_id,
+                "maker_recommendation": result.reviewer_decision,
+                "checker_id": current_user.username,
+                "checker_decision": decision.checker_decision,
+                "policy_evaluation_status": "NOT_REEVALUATED",
+                "original_decision_trace_id": (
+                    original_trace.trace_id
+                    if original_trace is not None
+                    else None
+                ),
+            }
+        )
+
+        decision_trace_service.create_trace(
+            db=db,
+            application_id=application_id,
+            decision_id=final_credit_decision.decision_id,
+            feature_snapshot_id=(
+                original_trace.feature_snapshot_id
+                if original_trace is not None
+                else None
+            ),
+            decision=decision.checker_decision,
+            model_version=credit_decision.model_version,
+            policy_version=credit_decision.policy_version,
+            effective_from=credit_decision.effective_from,
+            effective_to=credit_decision.effective_to,
+            model_outputs=(
+                original_trace.model_outputs
+                if original_trace is not None
+                else None
+            ),
+            policy_evaluation=(
+                original_trace.policy_evaluation
+                if original_trace is not None
+                else None
+            ),
+            reason_codes=final_reason_codes,
+            decision_metadata=trace_metadata,
+            commit=False,
+        )
 
         application_record.status = {
             "APPROVE": "APPROVED",
@@ -637,7 +823,7 @@ def submit_manual_review_checker_decision(
             previous_status=previous_status,
             new_status=result.review_status,
             actor_type="USER",
-            actor_reference=decision.checker_id,
+            actor_reference=current_user.username,
             reviewer_id=result.reviewer_id,
             reviewer_decision=result.reviewer_decision,
             remarks=decision.checker_remarks,
@@ -648,17 +834,18 @@ def submit_manual_review_checker_decision(
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
             application_id=application_id,
             actor_type="USER",
-            actor_reference=decision.checker_id,
-            action="MANUAL_REVIEW_CHECKER_DECISION",
-            entity_type="MANUAL_REVIEW",
-            entity_reference=result.review_id,
+            actor_reference=current_user.username,
+            action="CREDIT_DECISION_CHECKER_FINALIZED",
+            entity_type="CREDIT_DECISION",
+            entity_reference=final_credit_decision.decision_id,
             description=(
-                f"Checker finalized manual credit review with decision "
-                f"{decision.checker_decision}."
+                "The checker finalized the referred underwriting decision."
             ),
-            previous_state="PENDING_CHECKER",
-            new_state="COMPLETED",
+            previous_state="REFER",
+            new_state=decision.checker_decision,
             request_reference=application_id,
+            model_version=credit_decision.model_version,
+            policy_version=credit_decision.policy_version,
         )
 
         db.commit()
@@ -736,6 +923,9 @@ def get_manual_review(
     application_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_READ_ROLES),
+    ),
 ):
     result = manual_review_service.get_review(
         db=db,
@@ -765,6 +955,9 @@ def get_manual_review_history(
     application_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*MANUAL_REVIEW_READ_ROLES),
+    ),
 ):
     review = manual_review_service.get_review(
         db=db,

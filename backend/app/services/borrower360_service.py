@@ -1,4 +1,3 @@
-from backend.app.api.routes import internal_history
 from sqlalchemy.orm import Session
 
 from backend.app.models.customer import Customer
@@ -180,6 +179,7 @@ class Borrower360Service:
                     active_loans=bureau.active_loans,
                     total_outstanding=bureau.total_outstanding,
                     write_offs=bureau.write_offs,
+                    verification_status=bureau.verification_status,
                 )
                 if bureau is not None
                 else None
@@ -195,9 +195,8 @@ class Borrower360Service:
                     transaction_count=bank.transactions_count,
                     income_pattern={
                         "income_trend": bank.income_trend,
-                    }
-                    if bank.income_trend is not None
-                    else None,
+                    } if bank.income_trend is not None else None,
+                    verification_status=bank.verification_status,
                 )
                 if bank is not None
                 else None
@@ -223,108 +222,114 @@ class Borrower360Service:
                 else None
             ),
 
-            internal_history=InternalHistoryData(
-                past_loans=[
-                    {
-                        "previous_loans_count": (
-                            internal_history.previous_loans_count
-                        ),
-                        "active_loans_count": (
-                            internal_history.active_loans_count
-                        ),
-                        "closed_loans_count": (
-                            internal_history.closed_loans_count
-                        ),
-                        "total_previous_exposure": (
-                            internal_history.total_previous_exposure
-                        ),
-                        "total_outstanding_amount": (
-                            internal_history.total_outstanding_amount
-                        ),
-                    }
-                ]
-                if internal_history is not None
-                else [],
-
-                repayment=[
-                    {
-                        "repayment_id": repayment.repayment_id,
-                        "repayment_schedule_id": (
-                            repayment.repayment_schedule_id
-                        ),
-                        "amount": repayment.repayment_amount,
-                        "status": repayment.status,
-                        "paid_at": repayment.paid_at,
-                    }
-                    for repayment in repayments
-                ],
-
-                dpd=(
-                    [
+            internal_history=(
+                InternalHistoryData(
+                    past_loans=[
                         {
-                            "repayment_schedule_id": (
-                                collection.repayment_schedule_id
+                            "previous_loans_count": (
+                                internal_history.previous_loans_count
                             ),
-                            "days_past_due": collection.days_past_due,
-                            "status": collection.status,
+                            "active_loans_count": (
+                                internal_history.active_loans_count
+                            ),
+                            "closed_loans_count": (
+                                internal_history.closed_loans_count
+                            ),
+                            "total_previous_exposure": (
+                                internal_history.total_previous_exposure
+                            ),
+                            "total_outstanding_amount": (
+                                internal_history.total_outstanding_amount
+                            ),
                         }
-                        for collection in collections
-                        if collection.repayment_schedule_id is not None
-                    ]
-                    +
-                    (
+                    ] if internal_history is not None else [],
+
+                    repayment=[
+                        {
+                            "repayment_id": repayment.repayment_id,
+                            "repayment_schedule_id": (
+                                repayment.repayment_schedule_id
+                            ),
+                            "amount": repayment.repayment_amount,
+                            "status": repayment.status,
+                            "paid_at": repayment.paid_at,
+                        }
+                        for repayment in repayments
+                    ],
+
+                    dpd=(
                         [
                             {
-                                "dpd_count": internal_history.dpd_count,
-                                "max_dpd": internal_history.max_dpd,
+                                "repayment_schedule_id": (
+                                    collection.repayment_schedule_id
+                                ),
+                                "days_past_due": collection.days_past_due,
+                                "status": collection.status,
                             }
+                            for collection in collections
+                            if collection.repayment_schedule_id is not None
                         ]
-                        if internal_history is not None
-                        else []
-                    )
-                ),
-
-                collections=(
-                    [
-                        {
-                            "collection_id": collection.collection_id,
-                            "repayment_schedule_id": (
-                                collection.repayment_schedule_id
-                            ),
-                            "collection_type": collection.collection_type,
-                            "due_amount": collection.due_amount,
-                            "collected_amount": (
-                                collection.collected_amount
-                            ),
-                            "outstanding_amount": (
-                                collection.outstanding_amount
-                            ),
-                            "days_past_due": (
-                                collection.days_past_due
-                            ),
-                            "status": collection.status,
-                        }
-                        for collection in collections
-                    ]
-                    +
-                    (
+                        +
+                        (
+                            [
+                                {
+                                    "dpd_count": internal_history.dpd_count,
+                                    "max_dpd": internal_history.max_dpd,
+                                }
+                            ]
+                            if internal_history is not None
+                            else []
+                        )
+                    ),
+                
+                    collections=(
                         [
                             {
-                                "overdue_amount": (
+                                "collection_id": collection.collection_id,
+                                "repayment_schedule_id": (
+                                    collection.repayment_schedule_id
+                                ),
+                                "collection_type": collection.collection_type,
+                                "due_amount": collection.due_amount,
+                                "collected_amount": (
+                                    collection.collected_amount
+                                ),
+                                "outstanding_amount": (
+                                    collection.outstanding_amount
+                                ),
+                                "days_past_due": (
+                                    collection.days_past_due
+                                ),
+                                "status": collection.status,
+                            }
+                            for collection in collections
+                        ]
+                        +
+                        (
+                            [
+                                {
+                                    "overdue_amount": (
                                     internal_history.overdue_amount
-                                ),
-                                "write_off_count": (
-                                    internal_history.write_off_count
-                                ),
-                                "settlement_count": (
-                                    internal_history.settlement_count
-                                ),
-                            }
-                        ]
-                        if internal_history is not None
-                        else []
-                    )
-                ),
+                                    ),
+                                    "write_off_count": (
+                                        internal_history.write_off_count
+                                    ),
+                                    "settlement_count": (
+                                        internal_history.settlement_count
+                                    ),
+                                }
+                            ]
+                            if internal_history is not None
+                            else []
+                        )
+                    ),
+                )
+                if (
+                    internal_history is not None
+                    or repayments
+                    or collections
+                )
+                else None
             ),
             device_behaviour=(
                 DeviceBehaviourData(

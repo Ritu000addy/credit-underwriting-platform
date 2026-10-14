@@ -206,6 +206,10 @@ def evaluate_application(
         policy_metadata=policy_context["policy_metadata"],
     )
 
+    policy_evaluation_available = (
+        getattr(result, "policy", None) is not None
+    )
+
     if result.decision is not None:
         saved_decision = credit_decision_service.save_decision(
             db=db,
@@ -289,6 +293,16 @@ def evaluate_application(
             reason_codes=result.decision.reason_codes,
             decision_metadata={
                 "feature_version": feature_snapshot.feature_version,
+                "policy_evaluation_status": (
+                    "COMPLETED"
+                    if policy_evaluation_available
+                    else "NOT_EVALUATED"
+                ),
+                "evidence_review_reason_codes": (
+                    result.decision.reason_codes
+                    if not policy_evaluation_available
+                    else []
+                ),
             },
             commit=False,
         )
@@ -309,17 +323,40 @@ def evaluate_application(
             policy_version=result.decision.policy_version,
         )
 
+        risk_assessment_available = (
+            result.risk_assessment is not None
+        )
+
         audit_log_service.log(
             db=db,
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
             application_id=result.decision.application_id,
             actor_type="SYSTEM",
-            action="RISK_ASSESSMENT_COMPLETED",
-            entity_type="CREDIT_RISK_ASSESSMENT",
+            action=(
+                "RISK_ASSESSMENT_COMPLETED"
+                if risk_assessment_available
+                else "RISK_ASSESSMENT_SKIPPED"
+            ),
+            entity_type=(
+                "CREDIT_RISK_ASSESSMENT"
+                if risk_assessment_available
+                else "UNDERWRITING_EVIDENCE_REVIEW"
+            ),
             entity_reference=saved_decision.decision_id,
-            description="Credit risk model assessment completed.",
+            description=(
+                "Credit risk model assessment completed."
+                if risk_assessment_available
+                else (
+                    "Risk assessment was not run because an earlier "
+                    "evidence validation required review."
+                )
+            ),
             previous_state=None,
-            new_state="COMPLETED",
+            new_state=(
+                "COMPLETED"
+                if risk_assessment_available
+                else "NOT_EVALUATED"
+            ),
             request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,
@@ -330,15 +367,32 @@ def evaluate_application(
             audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
             application_id=result.decision.application_id,
             actor_type="SYSTEM",
-            action="POLICY_EVALUATION_COMPLETED",
-            entity_type="POLICY_EVALUATION",
+            action=(
+                "POLICY_EVALUATION_COMPLETED"
+                if policy_evaluation_available
+                else "POLICY_EVALUATION_SKIPPED"
+            ),
+            entity_type=(
+                "POLICY_EVALUATION"
+                if policy_evaluation_available
+                else "UNDERWRITING_EVIDENCE_REVIEW"
+            ),
             entity_reference=saved_decision.decision_id,
             description=(
                 f"Policy evaluation completed with status "
                 f"{result.decision.decision}."
+                if policy_evaluation_available
+                else (
+                    "Policy evaluation was not run because "
+                    "an earlier evidence validation required review."
+                )
             ),
             previous_state=None,
-            new_state=result.decision.decision,
+            new_state=(
+                result.decision.decision
+                if policy_evaluation_available
+                else "NOT_EVALUATED"
+            ),
             request_reference=get_request_id(request),
             model_version=result.decision.model_version,
             policy_version=result.decision.policy_version,

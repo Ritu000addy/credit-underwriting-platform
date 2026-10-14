@@ -88,6 +88,23 @@ class BankAnalysis(Base):
         nullable=True,
     )
 
+    verification_status: Mapped[str] = mapped_column(
+        String(20),
+        default="UNVERIFIED",
+        server_default="UNVERIFIED",
+        nullable=False,
+    )
+
+    verified_by: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+
     analyzed_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,

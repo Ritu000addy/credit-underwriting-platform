@@ -120,3 +120,36 @@ def get_current_user(
         )
 
     return user
+
+
+def require_roles(*allowed_roles: str):
+    """
+    Restrict an endpoint to authenticated users with an allowed role.
+
+    Authentication is performed by get_current_user().
+    The user's current role is read from the database, rather than
+    trusted from a client-submitted field or JWT role claim.
+    """
+    normalized_roles = frozenset(
+        role.strip().upper()
+        for role in allowed_roles
+        if isinstance(role, str) and role.strip()
+    )
+
+    if not normalized_roles:
+        raise ValueError("AT_LEAST_ONE_ROLE_REQUIRED")
+
+    def role_dependency(
+        current_user: AuthUser = Depends(get_current_user),
+    ) -> AuthUser:
+        user_role = (current_user.role or "").strip().upper()
+
+        if user_role not in normalized_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="INSUFFICIENT_ROLE",
+            )
+
+        return current_user
+
+    return role_dependency

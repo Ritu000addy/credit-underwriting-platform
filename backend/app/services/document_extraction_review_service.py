@@ -219,6 +219,7 @@ class DocumentExtractionReviewService:
         return bank_analysis_service.create_analysis(
             db=db,
             analysis=bank_analysis_input,
+            commit=False,
         )
 
 

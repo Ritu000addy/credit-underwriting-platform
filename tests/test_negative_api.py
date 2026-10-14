@@ -20,8 +20,8 @@ def test_underwriting_invalid_request_returns_422():
     body = response.json()
 
     assert body["error"]["code"] == "REQUEST_VALIDATION_ERROR"
-    assert "request_id" in body
-    assert body["path"] == "/underwriting/evaluate"
+    assert body["meta"]["request_id"]
+    assert body["meta"]["path"] == "/underwriting/evaluate"
 
 
 def test_underwriting_missing_request_body_returns_422():
@@ -34,4 +34,5 @@ def test_underwriting_missing_request_body_returns_422():
     body = response.json()
 
     assert body["error"]["code"] == "REQUEST_VALIDATION_ERROR"
-    assert "request_id" in body
+    assert body["meta"]["request_id"]
+    assert body["meta"]["path"] == "/underwriting/evaluate"

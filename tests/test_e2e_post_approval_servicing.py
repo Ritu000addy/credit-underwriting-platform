@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -9,7 +10,7 @@ from backend.app.database import SessionLocal
 from backend.app.models.credit_decision import CreditDecision
 from backend.app.models.loan_application import LoanApplication
 
-
+pytestmark = pytest.mark.usefixtures("operations_auth")
 client = TestClient(app)
 
 
@@ -434,7 +435,7 @@ def test_end_to_end_post_approval_servicing():
             "disbursement_amount": 150000,
             "sanction_id": sanction_id,
             "beneficiary_reference": beneficiary_id,
-            "payment_provider": "E2E_TEST_BANK",
+            "payment_provider": "DEV-BANK-PROVIDER", #E2E_TEST_BANK",
             "idempotency_key": idempotency_key,
         },
     )
@@ -660,7 +661,7 @@ def test_end_to_end_post_approval_servicing():
     # ============================================================
 
     reconciliation_response = client.post(
-        "/post-disbursement/reconciliation/check",
+        "/reconciliation/check",
         params={
             "disbursement_id": disbursement_id,
             "bank_reference": bank_reference,

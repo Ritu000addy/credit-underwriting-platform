@@ -4,6 +4,52 @@ from backend.app.schemas.fraud_rule import FraudRuleResult
 
 class FraudRulesEngine:
 
+    @staticmethod
+    def _append_binary_rule(
+        results: list[FraudRuleResult],
+        *,
+        available: int | None,
+        unavailable_rule_id: str,
+        rule_id: str,
+        signal: int | None,
+        unavailable_reason: str,
+        not_evaluated_reason: str,
+        fail_reason: str,
+        pass_reason: str,
+    ) -> None:
+        if available != 1:
+            results.append(
+                FraudRuleResult(
+                    rule_id=unavailable_rule_id,
+                    status="NOT_EVALUATED",
+                    reason=unavailable_reason,
+                )
+            )
+        elif signal is None:
+            results.append(
+                FraudRuleResult(
+                    rule_id=rule_id,
+                    status="NOT_EVALUATED",
+                    reason=not_evaluated_reason,
+                )
+            )
+        elif signal == 1:
+            results.append(
+                FraudRuleResult(
+                    rule_id=rule_id,
+                    status="FAIL",
+                    reason=fail_reason,
+                )
+            )
+        else:
+            results.append(
+                FraudRuleResult(
+                    rule_id=rule_id,
+                    status="PASS",
+                    reason=pass_reason,
+                )
+            )
+
     def evaluate(
         self,
         features: FraudFeatures,
@@ -11,80 +57,43 @@ class FraudRulesEngine:
 
         results: list[FraudRuleResult] = []
 
-        # --------------------------------------------------
-        # IDENTITY
-        # --------------------------------------------------
+        # Identity mismatch
+        self._append_binary_rule(
+            results,
+            available=features.identity_data_available,
+            unavailable_rule_id="IDENTITY_DATA",
+            rule_id="IDENTITY_MISMATCH",
+            signal=features.identity_mismatch_flag,
+            unavailable_reason="Identity data not available",
+            not_evaluated_reason=(
+                "Identity mismatch detector or comparison evidence is unavailable"
+            ),
+            fail_reason="Identity mismatch detected",
+            pass_reason="No identity mismatch detected",
+        )
 
-        if features.identity_data_available != 1:
 
-            results.append(
-                FraudRuleResult(
-                    rule_id="IDENTITY_DATA",
-                    status="NOT_EVALUATED",
-                    reason="Identity data not available",
-                )
-            )
+        # Multiple-device signal
+        self._append_binary_rule(
+            results,
+            available=features.device_data_available,
+            unavailable_rule_id="DEVICE",
+            rule_id="MULTIPLE_DEVICE",
+            signal=features.multiple_device_flag,
+            unavailable_reason="Device information not available",
+            not_evaluated_reason=(
+                "Multiple-device signal is unavailable"
+            ),
+            fail_reason="Multiple devices detected",
+            pass_reason="No multiple-device anomaly detected",
+        )
 
-        elif features.identity_mismatch_flag == 1:
 
-            results.append(
-                FraudRuleResult(
-                    rule_id="IDENTITY_MISMATCH",
-                    status="FAIL",
-                    reason="Identity mismatch detected",
-                )
-            )
-
-        else:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="IDENTITY_MISMATCH",
-                    status="PASS",
-                    reason="No identity mismatch detected",
-                )
-            )
-
-        # --------------------------------------------------
-        # MULTIPLE DEVICE
-        # --------------------------------------------------
-
-        if features.device_data_available != 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="DEVICE",
-                    status="NOT_EVALUATED",
-                    reason="Device information not available",
-                )
-            )
-
-        elif features.multiple_device_flag == 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="MULTIPLE_DEVICE",
-                    status="FAIL",
-                    reason="Multiple devices detected",
-                )
-            )
-
-        else:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="MULTIPLE_DEVICE",
-                    status="PASS",
-                    reason="No multiple-device anomaly detected",
-                )
-            )
-
-        # --------------------------------------------------
-        # DEVICE VELOCITY
-        # --------------------------------------------------
-
-        if features.device_velocity is None:
-
+        # Device application velocity
+        if (
+            features.device_data_available != 1
+            or features.device_velocity is None
+        ):
             results.append(
                 FraudRuleResult(
                     rule_id="DEVICE_VELOCITY",
@@ -92,128 +101,77 @@ class FraudRulesEngine:
                     reason="Device velocity information not available",
                 )
             )
-
         elif features.device_velocity > 5:
-
             results.append(
                 FraudRuleResult(
                     rule_id="DEVICE_VELOCITY",
                     status="FAIL",
-                    reason="High application velocity detected",
+                    reason=(
+                        "High application velocity detected against "
+                        "the development threshold"
+                    ),
                 )
             )
-
         else:
-
             results.append(
                 FraudRuleResult(
                     rule_id="DEVICE_VELOCITY",
                     status="PASS",
-                    reason="Device application velocity is within development threshold",
+                    reason=(
+                        "Device application velocity is within "
+                        "the development threshold"
+                    ),
                 )
             )
 
-        # --------------------------------------------------
-        # TRANSACTION
-        # --------------------------------------------------
+        # Transaction anomaly
+        self._append_binary_rule(
+            results,
+            available=features.transaction_data_available,
+            unavailable_rule_id="TRANSACTION_DATA",
+            rule_id="TRANSACTION_ANOMALY",
+            signal=features.transaction_anomaly_flag,
+            unavailable_reason="Transaction information not available",
+            not_evaluated_reason=(
+                "Transaction anomaly detector has not been implemented"
+            ),
+            fail_reason="Transaction anomaly detected",
+            pass_reason="No transaction anomaly detected",
+        )
 
-        if features.transaction_data_available != 1:
 
-            results.append(
-                FraudRuleResult(
-                    rule_id="TRANSACTION_DATA",
-                    status="NOT_EVALUATED",
-                    reason="Transaction information not available",
-                )
-            )
+        # Document anomaly
+        self._append_binary_rule(
+            results,
+            available=features.document_data_available,
+            unavailable_rule_id="DOCUMENT_DATA",
+            rule_id="DOCUMENT_ANOMALY",
+            signal=features.document_anomaly_flag,
+            unavailable_reason="Document information not available",
+            not_evaluated_reason=(
+                "Document anomaly detector has not been implemented"
+            ),
+            fail_reason="Document anomaly detected",
+            pass_reason="No document anomaly detected",
+        )
 
-        elif features.transaction_anomaly_flag == 1:
 
-            results.append(
-                FraudRuleResult(
-                    rule_id="TRANSACTION_ANOMALY",
-                    status="FAIL",
-                    reason="Transaction anomaly detected",
-                )
-            )
-
-        else:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="TRANSACTION_ANOMALY",
-                    status="PASS",
-                    reason="No transaction anomaly detected",
-                )
-            )
-
-        # --------------------------------------------------
-        # DOCUMENT
-        # --------------------------------------------------
-
-        if features.document_data_available != 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="DOCUMENT_DATA",
-                    status="NOT_EVALUATED",
-                    reason="Document information not available",
-                )
-            )
-
-        elif features.document_anomaly_flag == 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="DOCUMENT_ANOMALY",
-                    status="FAIL",
-                    reason="Document anomaly detected",
-                )
-            )
-
-        else:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="DOCUMENT_ANOMALY",
-                    status="PASS",
-                    reason="No document anomaly detected",
-                )
-            )
-
-        # --------------------------------------------------
-        # SESSION / BEHAVIOUR
-        # --------------------------------------------------
-
-        if features.behavioural_data_available != 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="SESSION_BEHAVIOUR",
-                    status="NOT_EVALUATED",
-                    reason="Behavioural information not available",
-                )
-            )
-
-        elif features.session_anomaly_flag == 1:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="SESSION_BEHAVIOUR",
-                    status="FAIL",
-                    reason="Session behaviour anomaly detected",
-                )
-            )
-
-        else:
-
-            results.append(
-                FraudRuleResult(
-                    rule_id="SESSION_BEHAVIOUR",
-                    status="PASS",
-                    reason="No session behaviour anomaly detected",
-                )
-            )
+        # Session and behavioural anomaly
+        self._append_binary_rule(
+            results,
+            available=features.behavioural_data_available,
+            unavailable_rule_id="SESSION_BEHAVIOUR",
+            rule_id="SESSION_BEHAVIOUR",
+            signal=features.session_anomaly_flag,
+            unavailable_reason=(
+                "Behavioural information not available"
+            ),
+            not_evaluated_reason=(
+                "Session anomaly detector has not been implemented"
+            ),
+            fail_reason="Session behaviour anomaly detected",
+            pass_reason="No session behaviour anomaly detected",
+        )
 
         return results
 

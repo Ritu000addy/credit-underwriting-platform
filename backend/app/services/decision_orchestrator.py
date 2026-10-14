@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from backend.app.schemas.credit_decision import CreditDecisionOutput
 from backend.app.schemas.policy import PolicyEvaluationResult
 from backend.app.schemas.risk_assessment import RiskAssessmentResult
@@ -32,6 +34,57 @@ class DecisionOrchestrator:
             policy_not_evaluated_count=policy_not_evaluated_count,
         )
 
+        fraud_reason_codes = risk_result.fraud_reason_codes or []
+
+        fraud_assessment_incomplete = (
+            risk_result.fraud_score is None
+            or risk_result.fraud_risk_level is None
+            or risk_result.fraud_confidence is None
+            or risk_result.fraud_confidence < Decimal("1")
+            or any(
+                code.startswith("FRAUD_DATA_")
+                for code in fraud_reason_codes
+            )
+        )
+
+        fraud_findings_present = (
+            risk_result.fraud_score is not None
+            and risk_result.fraud_score > Decimal("0")
+        )
+
+        final_decision = policy_result.policy_status
+
+        if (
+            final_decision == "APPROVE"
+            and (
+                fraud_assessment_incomplete
+                or fraud_findings_present
+            )
+        ):
+            final_decision = "REFER"
+
+        decision_reason_codes = list(
+            reason_code_result.reason_codes
+        )
+
+        if (
+            fraud_assessment_incomplete
+            and "FRAUD_ASSESSMENT_INCOMPLETE"
+            not in decision_reason_codes
+        ):
+            decision_reason_codes.append(
+                "FRAUD_ASSESSMENT_INCOMPLETE"
+            )
+
+        if (
+            fraud_findings_present
+            and "FRAUD_RISK_REVIEW_REQUIRED"
+            not in decision_reason_codes
+        ):
+            decision_reason_codes.append(
+                "FRAUD_RISK_REVIEW_REQUIRED"
+            )
+
         return CreditDecisionOutput(
             application_id = application_id,
 
@@ -60,11 +113,11 @@ class DecisionOrchestrator:
             foir=risk_result.foir,
 
             # Temporary Safe Decision
-            decision=policy_result.policy_status,
+            decision=final_decision,
             confidence=risk_result.confidence,
             
             # Preserve Model Reason Codes
-            reason_codes=reason_code_result.reason_codes,
+            reason_codes=decision_reason_codes,
 
             # Preserve Policy Evaluation
             policy_checks=policy_result.rules,

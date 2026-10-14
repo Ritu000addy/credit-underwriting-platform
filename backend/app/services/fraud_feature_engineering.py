@@ -17,10 +17,7 @@ class FraudFeatureEngineeringService:
 
         if borrower.kyc is not None:
             features.identity_data_available = 1
-
-            # Development placeholder:
-            # No identity mismatch source is currently available.
-            features.identity_mismatch_flag = 0
+            features.identity_mismatch_flag = None
 
         else:
             features.identity_data_available = 0
@@ -77,11 +74,7 @@ class FraudFeatureEngineeringService:
             )
 
             if transaction_count is not None:
-                features.transaction_data_available = 1
-
-                # Development placeholder.
-                # Actual transaction velocity requires
-                # a defined observation window.
+                features.transaction_data_available = 1                # a defined observation window.
                 features.transaction_velocity = None
 
             else:
@@ -91,23 +84,30 @@ class FraudFeatureEngineeringService:
 
             features.transaction_data_available = 0
 
-        features.transaction_anomaly_flag = 0
+        features.transaction_anomaly_flag = None
 
         # --------------------------------------------------
         # Documents
         # --------------------------------------------------
 
-        if borrower.documents is not None:
+        documents = borrower.documents
 
-            features.document_data_available = 1
+        document_records_present = bool(
+            documents
+            and (
+                documents.payslips
+                or documents.bank_statements
+                or documents.invoices
+                or documents.business_proofs
+            )
+        )
 
-            # No document anomaly detector implemented yet.
-            features.document_anomaly_flag = 0
+        features.document_data_available = int(
+            document_records_present
+        )
 
-        else:
-
-            features.document_data_available = 0
-            features.document_anomaly_flag = None
+        # A document anomaly detector has not been implemented yet.
+        features.document_anomaly_flag = None
 
         # --------------------------------------------------
         # Behaviour
@@ -122,9 +122,7 @@ class FraudFeatureEngineeringService:
             if session_patterns is not None:
 
                 features.behavioural_data_available = 1
-
-                # No session anomaly model implemented yet.
-                features.session_anomaly_flag = 0
+                features.session_anomaly_flag = None
 
             else:
 

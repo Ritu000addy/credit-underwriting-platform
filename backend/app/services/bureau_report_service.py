@@ -36,6 +36,7 @@ class BureauReportService:
             enquiries=report.enquiries,
             report_reference=report.report_reference,
             fetched_at=datetime.utcnow(),
+            verification_status="UNVERIFIED",
         )
 
         db.add(bureau_report)

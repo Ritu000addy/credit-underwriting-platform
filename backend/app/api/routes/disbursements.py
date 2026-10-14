@@ -29,6 +29,7 @@ from backend.app.schemas.common import ApiResponse
 
 from backend.app.core.workflow_logging import log_workflow_event
 from backend.app.core.responses import success_response
+from backend.app.core.security import require_roles
 
 from backend.app.services.disbursement_service import disbursement_service
 from backend.app.services.disbursement_eligibility_service import (
@@ -168,6 +169,9 @@ def log_disbursement_lifecycle(
 @router.post(
     "/beneficiaries",
     response_model=ApiResponse[BeneficiaryResponse],
+    dependencies=[
+        Depends(require_roles("ADMIN", "OPERATIONS", "CREDIT_OFFICER"))
+    ],
 )
 @log_disbursement_lifecycle(
     workflow="beneficiary_creation",
@@ -209,6 +213,9 @@ def create_beneficiary(
 @router.post(
     "/beneficiaries/{beneficiary_id}/validate",
     response_model=ApiResponse[dict[str, Any]],
+    dependencies=[
+        Depends(require_roles("ADMIN", "OPERATIONS", "CREDIT_OFFICER"))
+    ],
 )
 @log_disbursement_lifecycle(
     workflow="beneficiary_validation",
@@ -267,6 +274,17 @@ def validate_beneficiary(
 @router.post(
     "/eligibility",
     response_model=ApiResponse[DisbursementEligibilityResponse],
+    dependencies=[
+        Depends(
+            require_roles(
+                "ADMIN",
+                "CREDIT_ANALYST",
+                "CREDIT_OFFICER",
+                "OPERATIONS",
+                "RISK",
+            )
+        )
+    ],
 )
 @log_disbursement_lifecycle(
     workflow="disbursement_eligibility_check",
@@ -306,6 +324,7 @@ def check_disbursement_eligibility(
 @router.post(
     "",
     response_model=ApiResponse[DisbursementResponse],
+    dependencies=[Depends(require_roles("ADMIN", "OPERATIONS"))],
 )
 @log_disbursement_lifecycle(
     workflow="disbursement_creation",
@@ -465,6 +484,7 @@ def create_disbursement(
 @router.post(
     "/{disbursement_id}/status",
     response_model=ApiResponse[DisbursementResponse],
+    dependencies=[Depends(require_roles("ADMIN", "OPERATIONS"))],
 )
 def update_disbursement_status(
     disbursement_id: str,
@@ -705,6 +725,10 @@ def bank_disbursement_webhook(
         request_reference=webhook.disbursement_id,
     )
 
+    # Persist receipt independently of the later payment outcome.
+    # This ensures duplicate callbacks are also durably audited.
+    db.commit()
+
     if webhook.status == "SUCCESS":
         duplicate_webhook = disbursement.status == "PROCESSED"
 
@@ -928,6 +952,7 @@ def bank_disbursement_webhook(
 @router.post(
     "/{disbursement_id}/retry",
     response_model=ApiResponse[dict[str, Any]],
+    dependencies=[Depends(require_roles("ADMIN", "OPERATIONS"))],
 )
 def retry_disbursement(
     disbursement_id: str,
@@ -996,6 +1021,18 @@ def retry_disbursement(
 @router.get(
     "/{disbursement_id}",
     response_model=ApiResponse[DisbursementResponse],
+    dependencies=[
+        Depends(
+            require_roles(
+                "ADMIN",
+                "OPERATIONS",
+                "CREDIT_ANALYST",
+                "CREDIT_OFFICER",
+                "RISK",
+                "AUDITOR",
+            )
+        )
+    ],
 )
 def get_disbursement(
     disbursement_id: str,

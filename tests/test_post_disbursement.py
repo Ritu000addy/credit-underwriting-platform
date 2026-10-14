@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -14,9 +15,12 @@ from tests.test_e2e_post_approval_servicing import (
     seed_approved_credit_decision,
 )
 
-
+pytestmark = pytest.mark.usefixtures("operations_auth")
 client = TestClient(app)
 
+def response_payload(response):
+    body = response.json()
+    return body.get("data", body)
 
 def unique(prefix: str) -> str:
     return f"{prefix}-{uuid4().hex[:10].upper()}"
@@ -152,7 +156,8 @@ def test_post_disbursement_flow():
             "Agreement creation",
         )
 
-        agreement_payload = agreement_response.json()
+        agreement_body = agreement_response.json()
+        agreement_payload = agreement_body.get("data", agreement_body)
         agreement_id = agreement_payload["agreement_id"]
 
         assert agreement_id
@@ -178,7 +183,8 @@ def test_post_disbursement_flow():
             "Agreement eSign initiation",
         )
 
-        esign_init_payload = esign_init_response.json()
+        esign_init_body = esign_init_response.json()
+        esign_init_payload = esign_init_body.get("data", esign_init_body)
 
         assert esign_init_payload["esign_status"] == "INITIATED"
         assert esign_init_payload["agreement_status"] == "ACTIVE"
@@ -204,14 +210,14 @@ def test_post_disbursement_flow():
             "Agreement eSign completion",
         )
 
-        esign_complete_payload = (
-            esign_complete_response.json()
+        esign_complete_body = esign_complete_response.json()
+        esign_complete_payload = esign_complete_body.get(
+            "data",
+            esign_complete_body,
         )
 
-        assert (
-            esign_complete_payload["esign_status"]
-            == "SIGNED"
-        )
+        assert esign_complete_payload["esign_status"] == "SIGNED"
+        
         assert (
             esign_complete_payload["agreement_status"]
             == "COMPLETED"
@@ -253,7 +259,11 @@ def test_post_disbursement_flow():
             "Mandate INITIATED",
         )
 
-        mandate_init_payload = mandate_init_response.json()
+        mandate_init_body = mandate_init_response.json()
+        mandate_init_payload = mandate_init_body.get(
+            "data",
+            mandate_init_body,
+        )
 
         assert mandate_init_payload["status"] == "INITIATED"
 
@@ -277,8 +287,8 @@ def test_post_disbursement_flow():
             "Mandate COMPLETED",
         )
 
-        mandate_complete_payload = (
-            mandate_complete_response.json()
+        mandate_complete_payload = response_payload(
+            mandate_complete_response
         )
 
         assert mandate_complete_payload["status"] == "COMPLETED"
@@ -323,7 +333,9 @@ def test_post_disbursement_flow():
             "Disbursement INITIATED",
         )
 
-        initiated_payload = initiated_response.json()
+        initiated_payload = response_payload(
+            initiated_response
+        )
 
         assert initiated_payload["status"] == "INITIATED"
 
@@ -346,7 +358,9 @@ def test_post_disbursement_flow():
             "Disbursement PROCESSING",
         )
 
-        processing_payload = processing_response.json()
+        processing_payload = response_payload(
+            processing_response
+        )
 
         bank_reference = find_value(
             processing_payload,
@@ -391,8 +405,8 @@ def test_post_disbursement_flow():
             "Disbursement retrieval",
         )
 
-        final_disbursement = (
-            disbursement_get_response.json()
+        final_disbursement = response_payload(
+            disbursement_get_response
         )
 
         final_status = find_value(

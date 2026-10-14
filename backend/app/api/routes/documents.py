@@ -1,12 +1,16 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Request, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 
 from backend.app.core.responses import success_response
+from backend.app.core.security import require_roles
 from backend.app.core.workflow_logging import log_workflow_event
 
 from backend.app.models.document import Document
+from backend.app.models.auth_user import AuthUser
 
 from backend.app.schemas.document import (
     DocumentCreate,
@@ -16,6 +20,7 @@ from backend.app.schemas.common import ApiResponse
 from backend.app.schemas.bank_analysis import BankAnalysisResponse
 from backend.app.schemas.document_intelligence import DocumentIntelligenceResult, DocumentBankAnalysisAcceptance
 
+from backend.app.services.audit_log_service import audit_log_service
 from backend.app.services.document_service import document_service
 from backend.app.services.document_intelligence_service import (
     document_intelligence_service,
@@ -277,6 +282,15 @@ def accept_document_bank_analysis(
     review: DocumentBankAnalysisAcceptance,
     request: Request,
     db: Session = Depends(get_db),
+        current_user: AuthUser = Depends(
+        require_roles(
+            "ADMIN",
+            "CREDIT_ANALYST",
+            "CREDIT_OFFICER",
+            "OPERATIONS",
+            "RISK",
+        )
+    ),
 ):
     log_workflow_event(
         workflow="document_extraction_acceptance",
@@ -286,6 +300,12 @@ def accept_document_bank_analysis(
         entity_id=document_id,
     )
 
+    if review.reviewer_id.strip() != current_user.username:
+        raise HTTPException(
+            status_code=403,
+            detail="REVIEWER_IDENTITY_MISMATCH",
+        )
+
     try:
         result = document_extraction_review_service.accept(
             db=db,
@@ -294,6 +314,27 @@ def accept_document_bank_analysis(
         )
 
         response_data = BankAnalysisResponse.model_validate(result)
+
+        audit_log_service.log(
+            db=db,
+            audit_log_id=f"AUDIT-{uuid.uuid4().hex[:12].upper()}",
+            application_id=result.application_id,
+            actor_type="HUMAN_REVIEWER",
+            actor_reference=review.reviewer_id.strip(),
+            action="DOCUMENT_BANK_ANALYSIS_ACCEPTED",
+            entity_type="BANK_ANALYSIS",
+            entity_reference=result.bank_analysis_id,
+            description=(
+                "Reviewer accepted extracted bank-statement fields "
+                "into a new bank-analysis version. The source remains "
+                "UNVERIFIED pending its separate verification workflow."
+            ),
+            previous_state="EXTRACTED_DATA_REVIEW",
+            new_state="BANK_ANALYSIS_CREATED_UNVERIFIED",
+        )
+
+        db.commit()
+        db.refresh(result)
 
     except ValueError as exc:
         db.rollback()

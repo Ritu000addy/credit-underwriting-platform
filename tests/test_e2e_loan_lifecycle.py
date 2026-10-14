@@ -4,9 +4,39 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
+from types import SimpleNamespace
 
+import pytest
+
+from backend.app.core.security import get_current_user
+
+from backend.app.database import SessionLocal
+
+from backend.app.models.bureau_report import BureauReport
+from backend.app.models.bank_analysis import BankAnalysis
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def authenticated_credit_analyst():
+    """Authenticate this test as a credit analyst without changing production auth."""
+    previous_override = app.dependency_overrides.get(get_current_user)
+
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        user_id="E2E-TEST-ANALYST",
+        username="e2e-test-analyst",
+        role="CREDIT_ANALYST",
+        is_active=True,
+    )
+
+    yield
+
+    # Restore the previous override so other tests are unaffected.
+    if previous_override is None:
+        app.dependency_overrides.pop(get_current_user, None)
+    else:
+        app.dependency_overrides[get_current_user] = previous_override
 
 
 def unique(prefix: str) -> str:
@@ -45,7 +75,7 @@ def assert_success(response, step: str):
     )
 
 
-def test_end_to_end_origination_to_manual_review():
+def test_end_to_end_origination_to_manual_review(authenticated_credit_analyst,):
     # ============================================================
     # 1. Unique test identifiers
     # ============================================================
@@ -103,6 +133,8 @@ def test_end_to_end_origination_to_manual_review():
     # 3A. Source Data Ingestion
     # ============================================================
 
+    bureau_reference = unique("BUREAU")
+
     bureau_response = client.post(
         "/bureau-reports",
         json={
@@ -114,7 +146,7 @@ def test_end_to_end_origination_to_manual_review():
             "total_outstanding": 10000,
             "write_offs": 0,
             "enquiries": 1,
-            "report_reference": unique("BUREAU"),
+            "report_reference": bureau_reference,
         },
     )
 
@@ -122,6 +154,22 @@ def test_end_to_end_origination_to_manual_review():
         bureau_response,
         "Bureau report ingestion",
     )
+
+    db = SessionLocal()
+    try:
+        bureau_report = (
+            db.query(BureauReport)
+            .filter(
+                BureauReport.report_reference == bureau_reference,
+                BureauReport.application_id == application_id,
+            )
+            .one()
+        )
+
+        bureau_report.verification_status = "VERIFIED"
+        db.commit()
+    finally:
+        db.close()
 
     bank_response = client.post(
         "/bank-analysis",
@@ -142,6 +190,20 @@ def test_end_to_end_origination_to_manual_review():
         bank_response,
         "Bank analysis ingestion",
     )
+
+    db = SessionLocal()
+    try:
+        bank_analysis = (
+            db.query(BankAnalysis)
+            .filter(
+                BankAnalysis.application_id == application_id
+            )
+            .one()
+        )
+        bank_analysis.verification_status = "VERIFIED"
+        db.commit()
+    finally:
+        db.close()
 
     employment_response = client.post(
         "/employment",
@@ -243,10 +305,7 @@ def test_end_to_end_origination_to_manual_review():
     # ============================================================
 
     borrower360_response = client.get(
-        f"/borrower-360/{customer_id}",
-        params={
-            "application_id": application_id,
-        },
+        f"/borrower-360/{customer_id}/{application_id}",
     )
 
     assert_success(

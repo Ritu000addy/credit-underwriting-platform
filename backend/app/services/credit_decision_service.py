@@ -3,6 +3,7 @@ import os
 from sqlalchemy.orm import Session
 
 from backend.app.models.credit_decision import CreditDecision
+
 from backend.app.schemas.credit_decision import CreditDecisionOutput
 
 
@@ -13,6 +14,7 @@ class CreditDecisionService:
         db: Session,
         decision: CreditDecisionOutput,
         commit: bool = True,
+        record_source: str = "UNDERWRITING_WORKFLOW",
     ) -> CreditDecision:
 
         credit_decision = CreditDecision(
@@ -56,7 +58,7 @@ class CreditDecisionService:
 
             # Monitoring Metadata
             execution_environment=os.getenv("APP_ENV", "development").lower(),
-            record_source="UNDERWRITING_WORKFLOW",
+            record_source=record_source,
         )
 
         db.add(credit_decision)

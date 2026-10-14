@@ -14,15 +14,15 @@ class FraudValidator:
 
         if device_data is None:
             return FraudScreeningResult(
-                status="FAIL",
+                status="REFER",
                 checks=[
                     {
                         "check_id": "DEVICE_BEHAVIOUR_DATA",
-                        "status": "FAIL",
+                        "status": "NOT_AVAILABLE",
                         "reason": "Device/behaviour data not available",
                     }
                 ],
-                reason_codes=["DEVICE_BEHAVIOUR_DATA_MISSING"],
+                reason_codes=["FRAUD_DATA_DEVICE_BEHAVIOUR_DATA"],
             )
 
         # Device
@@ -101,7 +101,13 @@ class FraudValidator:
                 }
             )
         
-        status = "PASS"
+        for check in checks:
+            if check["status"] == "NOT_AVAILABLE":
+                reason_codes.append(
+                    f"FRAUD_DATA_{check['check_id']}"
+                )
+
+        status = "REFER" if reason_codes else "PASS"
 
         return FraudScreeningResult(
             status=status,
