@@ -1,35 +1,62 @@
+import uuid
+
 from backend.app.database import SessionLocal
+from backend.app.models.audit_log import AuditLog
 from backend.app.services.audit_log_service import audit_log_service
 
+def test_audit_log_persists_after_commit():
+    audit_log_id = f"TEST-AUDIT-{uuid.uuid4().hex[:12].upper()}"
 
-db = SessionLocal()
+    try:
+        # Create and commit the audit record.
+        db = SessionLocal()
 
-try:
-    result = audit_log_service.log(
-        db=db,
-        audit_log_id="DEV-AUDIT-001",
-        application_id="PERSIST-TEST-001",
-        actor_type="SYSTEM",
-        actor_reference="DEV_TEST",
-        action="CREDIT_DECISION_TEST",
-        entity_type="CREDIT_DECISION",
-        entity_reference="DEC-PERSIST-TEST-001",
-        description="Development audit-log persistence test.",
-        model_version="DEV-SYNTHETIC-LOGREG-01",
-        policy_version="POL-DEV-TEST-01",
-    )
+        try:
+            result = audit_log_service.log(
+                db=db,
+                audit_log_id=audit_log_id,
+                application_id=None,
+                actor_type="SYSTEM",
+                actor_reference="PYTEST",
+                action="AUDIT_PERSISTENCE_TEST",
+                entity_type="TEST",
+                entity_reference=audit_log_id,
+                description="Sythetic pytest audit persistence test.",
+                model_version="TEST-MODEL",
+                policy_version="TEST-POLICY",
+            )
 
-    print("AUDIT LOG SAVED")
-    print("audit_log_id:", result.audit_log_id)
-    print("application_id:", result.application_id)
-    print("actor_type:", result.actor_type)
-    print("actor_reference:", result.actor_reference)
-    print("action:", result.action)
-    print("entity_type:", result.entity_type)
-    print("entity_reference:", result.entity_reference)
-    print("description:", result.description)
-    print("model_version:", result.model_version)
-    print("policy_version:", result.policy_version)
+            assert result.audit_log_id == audit_log_id
+            db.commit()
 
-finally:
-    db.close()
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+        # Verify persistence using an independent session.
+        verify_db = SessionLocal()
+        try:
+            persisted = verify_db.get(AuditLog, audit_log_id)
+
+            assert persisted is not None
+            assert persisted.action == "AUDIT_PERSISTENCE_TEST"
+            assert persisted.actor_reference == "PYTEST"
+            assert persisted.entity_reference == audit_log_id
+        finally:
+            verify_db.close()
+
+    finally:
+        # Remove only this test's uniquely identified record.
+        cleanup_db = SessionLocal()
+        try:
+            cleanup_db.query(AuditLog).filter(
+                AuditLog.audit_log_id == audit_log_id
+            ).delete(synchronize_session=False)
+            cleanup_db.commit()
+        except Exception:
+            cleanup_db.rollback()
+            raise
+        finally:
+            cleanup_db.close()

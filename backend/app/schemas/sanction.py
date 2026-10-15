@@ -20,10 +20,11 @@ class SanctionResponse(BaseModel):
 
     sanction_id: str
     application_id: str
+    decision_id: str | None = None
     sanctioned_amount: Decimal
     sanctioned_tenure: int
-    sanctioned_emi: Decimal
-    interest_rate: Decimal
+    sanctioned_emi: Decimal | None = None
+    interest_rate: Decimal | None = None
     sanction_status: str
     approval_authority: str | None = None
     terms_and_conditions: str | None = None

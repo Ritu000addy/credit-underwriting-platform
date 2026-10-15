@@ -56,9 +56,12 @@ def create_sanction(
             approval_authority=sanction.approval_authority,
             terms_and_conditions=sanction.terms_and_conditions,
             expires_at=sanction.expires_at,
+            commit=False,
         )
 
         response_data = SanctionResponse.model_validate(result)
+
+        db.commit()
 
         log_workflow_event(
             workflow="sanction_creation",

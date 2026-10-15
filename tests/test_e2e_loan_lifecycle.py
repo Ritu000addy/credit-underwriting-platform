@@ -14,6 +14,10 @@ from backend.app.database import SessionLocal
 
 from backend.app.models.bureau_report import BureauReport
 from backend.app.models.bank_analysis import BankAnalysis
+from backend.app.models.decision_trace import DecisionTrace
+from backend.app.models.underwriting_feature_snapshot import (
+    UnderwritingFeatureSnapshot,
+)
 
 client = TestClient(app)
 
@@ -385,6 +389,102 @@ def test_end_to_end_origination_to_manual_review(authenticated_credit_analyst,):
 
     assert underwriting_payload["policy"]["policy_status"] == "REFER"
 
+        # Verify the persisted underwriting decision.
+    persisted_response = client.get(
+        f"/underwriting/{application_id}"
+    )
+    assert_success(
+        persisted_response,
+        "Persisted underwriting decision retrieval",
+    )
+
+    persisted_payload = persisted_response.json()["data"]
+
+    assert persisted_payload["application_id"] == application_id
+    assert persisted_payload["decision"] == decision
+    assert "POLICY_DATA_INCOMPLETE" in (
+        persisted_payload.get("reason_codes") or []
+    )
+
+    # Verify that decision-trace creation was audited.
+    audit_response = client.get(
+        f"/audit/{application_id}"
+    )
+    assert_success(audit_response, "Application audit retrieval")
+
+    audit_payload = audit_response.json()["data"]
+    audit_logs = audit_payload.get("audit_logs", [])
+
+    assert any(
+        entry.get("action") == "DECISION_TRACE_CREATED"
+        and entry.get("entity_type") == "DECISION_TRACE"
+        for entry in audit_logs
+    ), "No decision-trace creation audit event was persisted"
+
+        # Verify the persisted decision trace and its lineage.
+    with SessionLocal() as db:
+        traces = (
+            db.query(DecisionTrace)
+            .filter(
+                DecisionTrace.application_id == application_id
+            )
+            .all()
+        )
+
+        assert len(traces) == 1, (
+            f"Expected exactly one decision trace for {application_id}, "
+            f"found {len(traces)}"
+        )
+
+        trace = traces[0]
+
+        assert trace.decision_id == persisted_payload["decision_id"]
+        assert trace.decision == persisted_payload["decision"]
+        assert trace.policy_version == persisted_payload["policy_version"]
+        assert "POLICY_DATA_INCOMPLETE" in (
+            trace.reason_codes or []
+        )
+
+                # Verify policy evaluation was recorded consistently.
+        assert trace.decision_metadata is not None
+        assert (
+            trace.decision_metadata.get("policy_evaluation_status")
+            == "COMPLETED"
+        )
+        assert isinstance(trace.policy_evaluation, list)
+
+            # Verify the feature snapshot is linked to the same decision.
+        snapshot = (
+            db.query(UnderwritingFeatureSnapshot)
+            .filter(
+                UnderwritingFeatureSnapshot.decision_id
+                == persisted_payload["decision_id"]
+            )
+            .one_or_none()
+        )
+
+        assert snapshot is not None, (
+            "No feature snapshot was persisted for the decision"
+        )
+        assert snapshot.application_id == application_id
+        assert snapshot.decision_id == trace.decision_id
+        assert trace.feature_snapshot_id == snapshot.feature_snapshot_id
+        assert snapshot.features is not None
+        assert isinstance(snapshot.features, dict)
+
+        assert trace.model_version == persisted_payload["model_version"], (
+            "Decision trace model version does not match the persisted decision"
+        )
+
+        assert snapshot.model_version == trace.model_version, (
+            "Feature snapshot model version does not match the decision trace"
+        )
+
+        assert (
+            snapshot.feature_version
+            == trace.decision_metadata.get("feature_version")
+        ), "Feature snapshot version does not match decision metadata"
+
     # ============================================================
     # 6. Manual Review created for REFER decision
     # ============================================================
@@ -399,8 +499,21 @@ def test_end_to_end_origination_to_manual_review(authenticated_credit_analyst,):
     )
 
     manual_review_payload = manual_review_response.json()
+    assert manual_review_payload["success"] is True
 
-    assert manual_review_payload is not None
+    manual_review = manual_review_payload["data"]
+
+    assert manual_review is not None
+    assert manual_review["application_id"] == application_id
+    assert manual_review["review_id"]
+    assert manual_review["review_status"] == "OPEN"
+    assert manual_review["maker_checker_required"] is True
+    assert manual_review["review_reason"]
+
+    assert "POLICY_DATA_INCOMPLETE" in (
+        manual_review["review_reason"]
+    )
+
 
     # ============================================================
     # 7. Review Exception created for REFER
@@ -416,5 +529,33 @@ def test_end_to_end_origination_to_manual_review(authenticated_credit_analyst,):
     )
 
     exception_payload = exception_response.json()
+    assert exception_payload["success"] is True
 
-    assert exception_payload is not None
+    exceptions = exception_payload["data"]
+
+    assert isinstance(exceptions, list)
+    assert exceptions, "No review exception was created"
+
+    matching_exceptions = [
+        exception
+        for exception in exceptions
+        if exception["application_id"] == application_id
+        and exception["exception_type"] == "UNDERWRITING_REFER"
+    ]
+
+    assert matching_exceptions, (
+        "No UNDERWRITING_REFER exception exists "
+        "for this application"
+    )
+
+    review_exception = matching_exceptions[0]
+
+    assert (
+        review_exception["review_id"]
+        == manual_review["review_id"]
+    )
+    assert review_exception["status"] == "OPEN"
+    assert review_exception["description"]
+    assert "POLICY_DATA_INCOMPLETE" in (
+        review_exception["description"]
+    )

@@ -31,6 +31,8 @@ class Sanction(Base):
             "interest_rate IS NULL OR interest_rate >= 0",
             name="ck_sanctions_interest_rate_non_negative",
         ),
+
+        Index("ix_sanctions_decision_id", "decision_id"),
     )
 
     sanction_id: Mapped[str] = mapped_column(
@@ -42,6 +44,16 @@ class Sanction(Base):
         String(50),
         ForeignKey("loan_applications.application_id"),
         nullable=False,
+    )
+
+    decision_id: Mapped[str | None] = mapped_column(
+        String(50),
+        ForeignKey(
+            "credit_decisions.decision_id",
+            name="fk_sanctions_decision_id_credit_decisions",
+            ondelete="RESTRICT",
+        ),
+        nullable=True,
     )
 
     sanctioned_amount: Mapped[Decimal] = mapped_column(

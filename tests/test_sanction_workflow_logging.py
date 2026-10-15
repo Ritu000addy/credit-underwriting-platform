@@ -44,8 +44,11 @@ def setup_test(monkeypatch):
     events = []
     rollbacks = []
 
+    commits = []
+
     db = SimpleNamespace(
-        rollback=lambda: rollbacks.append("rollback")
+        commit=lambda: commits.append("commit"),
+        rollback=lambda: rollbacks.append("rollback"),
     )
 
     monkeypatch.setattr(
@@ -66,18 +69,18 @@ def setup_test(monkeypatch):
         SimpleNamespace(model_validate=lambda value: value),
     )
 
-    return events, rollbacks, db
+    return events, rollbacks, commits, db
 
 
 def test_create_sanction_logs_success(monkeypatch):
-    events, rollbacks, db = setup_test(monkeypatch)
+    events, rollbacks, commits, db = setup_test(monkeypatch)
     request_body = make_sanction_request()
 
     sanction_result = SimpleNamespace(
         sanction_id="SAN-LOG-001",
         application_id=request_body.application_id,
         sanction_status="APPROVED",
-    )
+    )    
 
     created_sanction_ids = []
     created_results = []
@@ -128,6 +131,8 @@ def test_create_sanction_logs_success(monkeypatch):
     assert response["data"] is created_results[0]
     assert rollbacks == []
 
+    assert commits == ["commit"]
+
     # Do not expose sanction amounts or terms in workflow metadata.
     for event in events:
         assert "sanctioned_amount" not in event
@@ -136,7 +141,7 @@ def test_create_sanction_logs_success(monkeypatch):
 
 
 def test_create_sanction_failure_logs_and_rolls_back(monkeypatch):
-    events, rollbacks, db = setup_test(monkeypatch)
+    events, rollbacks, commits, db = setup_test(monkeypatch)
     request_body = make_sanction_request()
 
     def fail_create_sanction(**kwargs):

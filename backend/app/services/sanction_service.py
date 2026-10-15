@@ -24,6 +24,7 @@ class SanctionService:
         approval_authority: str | None = None,
         terms_and_conditions: str | None = None,
         expires_at=None,
+        commit: bool = True,
     ) -> Sanction:
 
         credit_decision = (
@@ -55,6 +56,7 @@ class SanctionService:
         sanction = Sanction(
             sanction_id=sanction_id,
             application_id=application_id,
+            decision_id=credit_decision.decision_id,
             sanctioned_amount=sanctioned_amount,
             sanctioned_tenure=sanctioned_tenure,
             sanctioned_emi=sanctioned_emi,
@@ -85,7 +87,11 @@ class SanctionService:
             request_reference=application_id,
         )
         
-        db.commit()
+        if commit:
+            db.commit()
+        else:
+            db.flush()
+            
         db.refresh(sanction)
 
         return sanction

@@ -25,7 +25,9 @@ from backend.app.services.repayment_schedule_service import (
     repayment_schedule_service,
 )
 from backend.app.services.repayment_service import repayment_service
-
+from backend.app.services.borrower360_service import (
+    borrower360_service,
+)
 
 class FakeQuery:
     def __init__(self, result):
@@ -411,4 +413,142 @@ def build_test_request(
             "client": ("testclient", 50000),
             "server": ("testserver", 80),
         }
+    )
+
+def build_persisted_underwriting_application(
+    *,
+    tenure= 12,
+    interest_rate = Decimal("12.00"),
+):
+    return SimpleNamespace(
+        application_id="NEG-TERMS-001",
+        customer_id="CUST-001",
+        requested_amount=Decimal("150000.00"),
+        loan_tenure_months=tenure,
+        annual_interest_rate=interest_rate,
+    )
+
+@pytest.mark.parametrize(
+    (
+        "request_amount",
+        "request_tenure",
+        "request_rate",
+    ),
+    [
+        (
+            Decimal("160000.00"),
+            12,
+            Decimal("12.00"),
+        ),
+        (
+            Decimal("150000.00"),
+            18,
+            Decimal("12.00"),
+        ),
+        (
+            Decimal("150000.00"),
+            12,
+            Decimal("15.00"),
+        ),
+    ],
+    ids=[
+        "requested-amount-mismatch",
+        "loan-tenure-mismatch",
+        "interest-rate-mismatch",
+    ],
+)
+
+def test_underwriting_application_terms_mismatch_returns_409(
+    request_amount,
+    request_tenure,
+    request_rate,
+    monkeypatch,
+):
+    application = ApplicationCreate(
+        application_id="NEG-TERMS-001",
+        customer_id="CUST-001",
+        requested_amount=request_amount,
+        loan_tenure_months=request_tenure,
+        annual_interest_rate=request_rate,
+    )
+
+    borrower = build_borrower("CUST-001")
+
+    db = FakeUnderwritingDB(
+        application_record=(
+            build_persisted_underwriting_application()
+        ),
+        customer=SimpleNamespace(
+            customer_id="CUST-001",
+        ),
+    )
+
+    # Isolate loan-term validation from database-backed
+    # Borrower 360 construction.
+    monkeypatch.setattr(
+        borrower360_service,
+        "build",
+        lambda **kwargs: borrower,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        evaluate_application(
+            application=application,
+            borrower=borrower,
+            request=build_test_request(
+                                path="/underwriting/evaluate",
+            ),
+            db=db,
+        )
+
+    assert exc.value.status_code == 409
+    assert (
+        exc.value.detail
+        == "APPLICATION_TERMS_MISMATCH"
+    )
+
+
+def test_underwriting_missing_persisted_tenure_returns_409(monkeypatch,):
+    application = ApplicationCreate(
+        application_id="NEG-TERMS-001",
+        customer_id="CUST-001",
+        requested_amount=Decimal("150000.00"),
+        loan_tenure_months=12,
+        annual_interest_rate=Decimal("12.00"),
+    )
+
+    borrower = build_borrower("CUST-001")
+
+    db = FakeUnderwritingDB(
+        application_record=(
+            build_persisted_underwriting_application(
+                tenure=None,
+            )
+        ),
+        customer=SimpleNamespace(
+            customer_id="CUST-001",
+        ),
+    )
+
+    # Prevent the test from requiring a real database query.
+    monkeypatch.setattr(
+        borrower360_service,
+        "build",
+        lambda **kwargs: borrower,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        evaluate_application(
+            application=application,
+            borrower=borrower,
+            request=build_test_request(
+                path="/underwriting/evaluate",
+            ),
+            db=db,
+        )
+
+    assert exc.value.status_code == 409
+    assert (
+        exc.value.detail
+        == "APPLICATION_TERMS_NOT_PERSISTED"
     )
