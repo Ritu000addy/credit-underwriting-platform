@@ -301,6 +301,7 @@ def test_checker_approval_preserves_original_refer_and_persists_final_trace():
 
             review = db.get(ManualReview, case["review_id"])
             assert review.review_status == "COMPLETED"
+            assert review.reviewer_id == "maker.test"
             assert review.checker_id == "checker.test"
             assert review.checker_decision == "APPROVE"
 
@@ -493,6 +494,9 @@ def test_checker_failure_rolls_back_decision_trace_and_review_changes(
             assert review.review_status == "PENDING_CHECKER"
             assert review.checker_decision is None
 
+            assert review.reviewer_id == "maker.test"
+            assert review.reviewer_decision == "APPROVE"
+
             final_audits = (
                 db.query(AuditLog)
                 .filter(
@@ -555,6 +559,24 @@ def test_checker_endpoint_rejects_forged_checker_identity():
         )
 
         assert response.status_code == 403, response.text
+
+    finally:
+        cleanup_checker_case(case)
+
+
+def test_maker_cannot_approve_own_manual_review():
+    case = seed_checker_case()
+
+    try:
+        response = submit_checker_decision(
+            case["application_id"],
+            "APPROVE",
+            username="maker.test",
+            submitted_checker_id="maker.test",
+        )
+
+        assert response.status_code == 403, response.text
+        assert response.json()["error"]["code"] == "MAKER_CANNOT_BE_CHECKER"
 
     finally:
         cleanup_checker_case(case)

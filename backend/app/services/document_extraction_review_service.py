@@ -110,6 +110,14 @@ class DocumentExtractionReviewService:
         ):
             raise ValueError("DOCUMENT_EXTRACTION_REFERENCE_MISMATCH")
 
+        if any(
+            conflict.conflict_type == "CONTRADICTORY_SOURCE_VALUES"
+            for conflict in extraction.conflicts
+        ):
+            raise ValueError(
+                "DOCUMENT_CONTRADICTORY_SOURCE_VALUES_REVIEW_REQUIRED"
+            )
+
         if not review.reviewer_id.strip():
             raise ValueError("DOCUMENT_REVIEWER_REQUIRED")
 

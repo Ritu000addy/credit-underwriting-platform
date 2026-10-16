@@ -60,3 +60,13 @@ def test_audit_log_persists_after_commit():
             raise
         finally:
             cleanup_db.close()
+
+
+def test_audit_log_service_exposes_no_mutation_methods():
+    assert callable(audit_log_service.log)
+    assert callable(audit_log_service.get_by_application)
+
+    assert not hasattr(audit_log_service, "update")
+    assert not hasattr(audit_log_service, "delete")
+    assert not hasattr(audit_log_service, "update_audit_log")
+    assert not hasattr(audit_log_service, "delete_audit_log")

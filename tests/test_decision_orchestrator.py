@@ -63,3 +63,115 @@ def test_decision_orchestrator_refer_path():
     assert result.policy_version == "POL-2026.09"
     assert result.effective_from == "2026-09-01T00:00:00"
     assert result.model_version == "CRD-ML-01.04"
+
+
+def test_approve_requires_complete_clear_fraud_assessment():
+    policy_result = PolicyEvaluationResult(
+        policy_status="APPROVE",
+        policy_version="POL-2026.09",
+        effective_from="2026-09-01T00:00:00",
+        effective_to=None,
+        rules=[],
+    )
+
+    risk_result = RiskAssessmentResult(
+        status="COMPLETED",
+        credit_score=780,
+        probability_of_default=Decimal("0.01"),
+        fraud_score=Decimal("0"),
+        fraud_risk_level="VERY_LOW",
+        fraud_confidence=Decimal("1"),
+        model_version="CRD-ML-01.04",
+    )
+
+    result = decision_orchestrator.decide(
+        application_id="LN-APPROVE-001",
+        policy_result=policy_result,
+        risk_result=risk_result,
+    )
+
+    assert result.decision == "APPROVE"
+
+
+def test_approve_becomes_refer_when_fraud_assessment_is_incomplete():
+    policy_result = PolicyEvaluationResult(
+        policy_status="APPROVE",
+        policy_version="POL-2026.09",
+        effective_from="2026-09-01T00:00:00",
+        effective_to=None,
+        rules=[],
+    )
+
+    risk_result = RiskAssessmentResult(
+        status="COMPLETED",
+        credit_score=780,
+        probability_of_default=Decimal("0.01"),
+        fraud_score=Decimal("0"),
+        fraud_risk_level="VERY_LOW",
+        fraud_confidence=None,
+        model_version="CRD-ML-01.04",
+    )
+
+    result = decision_orchestrator.decide(
+        application_id="LN-FRAUD-INCOMPLETE-001",
+        policy_result=policy_result,
+        risk_result=risk_result,
+    )
+
+    assert result.decision == "REFER"
+    assert "FRAUD_ASSESSMENT_INCOMPLETE" in result.reason_codes
+
+
+def test_approve_becomes_refer_when_fraud_findings_exist():
+    policy_result = PolicyEvaluationResult(
+        policy_status="APPROVE",
+        policy_version="POL-2026.09",
+        effective_from="2026-09-01T00:00:00",
+        effective_to=None,
+        rules=[],
+    )
+
+    risk_result = RiskAssessmentResult(
+        status="COMPLETED",
+        credit_score=780,
+        probability_of_default=Decimal("0.01"),
+        fraud_score=Decimal("5"),
+        fraud_risk_level="MEDIUM",
+        fraud_confidence=Decimal("1"),
+        model_version="CRD-ML-01.04",
+    )
+
+    result = decision_orchestrator.decide(
+        application_id="LN-FRAUD-FINDING-001",
+        policy_result=policy_result,
+        risk_result=risk_result,
+    )
+
+    assert result.decision == "REFER"
+    assert "FRAUD_RISK_REVIEW_REQUIRED" in result.reason_codes
+
+
+def test_reject_remains_reject_when_fraud_assessment_is_incomplete():
+    policy_result = PolicyEvaluationResult(
+        policy_status="REJECT",
+        policy_version="POL-2026.09",
+        effective_from="2026-09-01T00:00:00",
+        effective_to=None,
+        rules=[],
+    )
+
+    risk_result = RiskAssessmentResult(
+        status="PENDING",
+        fraud_score=None,
+        fraud_risk_level=None,
+        fraud_confidence=None,
+        model_version="CRD-ML-01.04",
+    )
+
+    result = decision_orchestrator.decide(
+        application_id="LN-REJECT-001",
+        policy_result=policy_result,
+        risk_result=risk_result,
+    )
+
+    assert result.decision == "REJECT"

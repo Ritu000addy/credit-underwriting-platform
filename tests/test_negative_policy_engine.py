@@ -315,3 +315,19 @@ def test_policy_refers_when_required_rule_not_evaluated():
     result = evaluate()
 
     assert result.policy_status == "REFER"
+
+
+
+def test_disabled_policy_exceptions_are_not_evaluated_as_a_blocker():
+    context = get_policy_context()
+
+    exceptions = context["policy_config"]["exceptions"]
+
+    assert exceptions["enabled"] is False
+    assert exceptions["rules"] == []
+
+    result = evaluate()
+
+    exception_rule = get_rule(result, "POLICY_EXCEPTION")
+    assert exception_rule.status == "NOT_EVALUATED"
+    assert result.policy_status == "REFER"

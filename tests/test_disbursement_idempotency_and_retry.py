@@ -351,3 +351,43 @@ def test_retry_limit_prevents_another_provider_attempt(monkeypatch):
 
     finally:
         cleanup_case(case)
+
+
+def test_processed_disbursement_cannot_be_marked_failed():
+    case = seed_case(status="PROCESSED")
+
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+
+        response = client.post(
+            f"/disbursements/{case['disbursement_id']}/status",
+            json={
+                "status": "FAILED",
+                "failure_reason": "Regression test: invalid transition",
+            },
+        )
+
+        assert response.status_code == 409, response.text
+        assert (
+            "DISBURSEMENT_NOT_ELIGIBLE_FOR_FAILURE"
+            in response.text
+        )
+
+        db = SessionLocal()
+        try:
+            disbursement = (
+                db.query(Disbursement)
+                .filter(
+                    Disbursement.disbursement_id
+                    == case["disbursement_id"]
+                )
+                .one()
+            )
+
+            assert disbursement.status == "PROCESSED"
+
+        finally:
+            db.close()
+
+    finally:
+        cleanup_case(case)

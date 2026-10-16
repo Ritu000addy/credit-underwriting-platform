@@ -1,4 +1,3 @@
-from urllib3.util import retry
 import json
 import re
 import uuid
@@ -331,6 +330,41 @@ Document content, encoded as a JSON string:
 
             fields[field_name] = field
 
+        for field_name in (
+            "closing_balance",
+            "monthly_credits",
+            "monthly_debits",
+            "average_balance",
+        ):
+            contradictory_values = (
+                self._find_contradictory_source_values(
+                    source_text, field_name
+                )
+            )
+
+            if len(contradictory_values) <= 1:
+                continue
+
+            fields[field_name] = ExtractedDocumentField(
+                value=None,
+                confidence=0.0,
+                evidence=None,
+            )
+
+            conflicts.append(
+                DocumentFieldConflict(
+                    field_name=field_name,
+                    conflict_type="CONTRADICTORY_SOURCE_VALUES",
+                    document_value=contradictory_values[0],
+                    borrower360_value=contradictory_values[1],
+                    evidence=" | ".join(contradictory_values),
+                    message=(
+                        f"Multiple distinct source values were found for "
+                        f"{field_name}. Manual review is required."
+                    ),
+                )
+            )
+
         missing_fields = [
             name
             for name in config["required"]
@@ -338,6 +372,55 @@ Document content, encoded as a JSON string:
         ]
 
         return fields, missing_fields, conflicts, warnings
+
+    def _find_contradictory_source_values(
+        self, source_text: str, field_name: str
+    ) -> list[str]:
+        """Find distinct values on explicitly labelled summary lines."""
+        label_patterns = {
+            "closing_balance": (
+                r"closing\s+balance",
+                r"balance\s+at\s+close",
+            ),
+            "monthly_credits": (
+                r"monthly\s+credits",
+                r"total\s+credits",
+                r"credits\s+total",
+            ),
+            "monthly_debits": (
+                r"monthly\s+debits",
+                r"total\s+debits",
+                r"debits\s+total",
+            ),
+            "average_balance": (
+                r"average\s+balance",
+                r"avg\.?\s+balance",
+                r"average\s+daily\s+balance",
+            ),
+        }
+
+        patterns = label_patterns.get(field_name, ())
+        values = []
+
+        for line in source_text.splitlines():
+            for label_pattern in patterns:
+                match = re.match(
+                    rf"^\s*(?:{label_pattern})\s*[:\-]\s*(.+?)\s*$",
+                    line,
+                    flags=re.IGNORECASE,
+                )
+                if not match:
+                    continue
+
+                value = match.group(1).strip()
+                if not any(
+                    self._values_equal(value, existing)
+                    for existing in values
+                ):
+                    values.append(value)
+                break
+
+        return values
 
     @staticmethod
     def _compare_with_borrower360(

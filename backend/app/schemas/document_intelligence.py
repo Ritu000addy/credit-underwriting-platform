@@ -19,6 +19,7 @@ class DocumentFieldConflict(BaseModel):
     conflict_type: Literal[
         "EVIDENCE_NOT_FOUND",
         "BORROWER360_MISMATCH",
+        "CONTRADICTORY_SOURCE_VALUES",
     ]
     document_value: str | int | float | bool | None = None
     borrower360_value: str | int | float | bool | None = None

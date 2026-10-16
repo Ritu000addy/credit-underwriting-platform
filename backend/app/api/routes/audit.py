@@ -4,9 +4,12 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from backend.app.core.responses import success_response
+from backend.app.core.security import require_roles
 from backend.app.core.workflow_logging import log_workflow_event
 
 from backend.app.database import get_db
+
+from backend.app.models.auth_user import AuthUser
 
 from backend.app.schemas.common import ApiResponse
 
@@ -19,6 +22,14 @@ router = APIRouter(
 )
 
 
+AUDIT_READ_ROLES = (
+    "ADMIN",
+    "CREDIT_ANALYST",
+    "CREDIT_OFFICER",
+    "RISK",
+    "AUDITOR",
+)
+
 @router.get(
     "/{application_id}",
     response_model=ApiResponse[dict[str, Any]],
@@ -27,6 +38,9 @@ def get_application_audit(
     application_id: str,
     request: Request,
     db: Session = Depends(get_db),
+    current_user: AuthUser = Depends(
+        require_roles(*AUDIT_READ_ROLES),
+    ),
 ):
     results = audit_log_service.get_by_application(
         db=db,

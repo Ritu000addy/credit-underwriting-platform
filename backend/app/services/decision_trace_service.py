@@ -23,7 +23,7 @@ class DecisionTraceService:
         policy_evaluation: list[dict[str, Any]] | None,
         reason_codes: list[str] | None,
         decision_metadata: dict[str, Any] | None = None,
-        commit: bool = True,
+        commit: bool = False,
     ) -> DecisionTrace:
 
         trace = DecisionTrace(

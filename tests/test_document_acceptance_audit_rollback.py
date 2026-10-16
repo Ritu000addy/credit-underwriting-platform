@@ -204,3 +204,83 @@ def test_document_acceptance_rolls_back_when_audit_fails(monkeypatch):
 
     finally:
         cleanup_document_case(case)
+
+
+
+def test_document_acceptance_rejects_contradictory_source_values():
+    case = seed_document_case()
+
+    try:
+        db = SessionLocal()
+        try:
+            document = db.get(Document, case["document_id"])
+            assert document is not None
+
+            extraction = json.loads(document.extracted_data)
+            extraction["conflicts"] = [
+                {
+                    "field_name": "monthly_credits",
+                    "conflict_type": "CONTRADICTORY_SOURCE_VALUES",
+                    "document_value": "80000",
+                    "borrower360_value": "90000",
+                    "evidence": (
+                        "Monthly credits total: INR 80,000 | "
+                        "Monthly credits total: INR 90,000"
+                    ),
+                    "message": (
+                        "Multiple distinct source values were found. "
+                        "Manual review is required."
+                    ),
+                }
+            ]
+            document.extracted_data = json.dumps(extraction)
+            db.commit()
+
+        finally:
+            db.close()
+
+        from backend.app.services.document_extraction_review_service import (
+            document_extraction_review_service,
+        )
+        from backend.app.schemas.document_intelligence import (
+            DocumentBankAnalysisAcceptance,
+        )
+
+        db = SessionLocal()
+        try:
+            review = DocumentBankAnalysisAcceptance(
+                reviewer_id="reviewer.contradiction",
+                confirmed=True,
+                accepted_fields=["monthly_credits"],
+                acknowledged_conflicts=["monthly_credits"],
+            )
+
+            try:
+                document_extraction_review_service.accept(
+                    db=db,
+                    document_id=case["document_id"],
+                    review=review,
+                )
+                assert False, (
+                    "Expected contradictory source values to be rejected"
+                )
+            except ValueError as exc:
+                assert str(exc) == (
+                    "DOCUMENT_CONTRADICTORY_SOURCE_VALUES_REVIEW_REQUIRED"
+                )
+
+            analyses = (
+                db.query(BankAnalysis)
+                .filter(
+                    BankAnalysis.application_id
+                    == case["application_id"]
+                )
+                .all()
+            )
+            assert analyses == []
+
+        finally:
+            db.close()
+
+    finally:
+        cleanup_document_case(case)

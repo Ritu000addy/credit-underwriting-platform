@@ -18,6 +18,7 @@ from backend.app.models.decision_trace import DecisionTrace
 from backend.app.models.underwriting_feature_snapshot import (
     UnderwritingFeatureSnapshot,
 )
+from backend.app.models.credit_decision import CreditDecision
 
 client = TestClient(app)
 
@@ -437,6 +438,17 @@ def test_end_to_end_origination_to_manual_review(authenticated_credit_analyst,):
         )
 
         trace = traces[0]
+
+        persisted_decision = db.get(
+            CreditDecision,
+            persisted_payload["decision_id"],
+        )
+
+        assert persisted_decision is not None, (
+            "Persisted credit decision was not found"
+        )
+        assert persisted_decision.application_id == application_id
+        assert persisted_decision.application_id == trace.application_id
 
         assert trace.decision_id == persisted_payload["decision_id"]
         assert trace.decision == persisted_payload["decision"]
