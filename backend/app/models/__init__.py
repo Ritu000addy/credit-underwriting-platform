@@ -28,3 +28,6 @@ from backend.app.models.auth_user import AuthUser
 from backend.app.models.document_extraction_review import (
     DocumentExtractionReview,
 )
+from backend.app.models.genai_generation_history import (
+    GenAIGenerationHistory,
+)

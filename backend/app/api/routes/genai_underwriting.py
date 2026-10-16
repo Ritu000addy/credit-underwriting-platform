@@ -1,7 +1,12 @@
+import os
 import time
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, Depends
+
+from sqlalchemy.orm import Session
+
+from backend.app.database import get_db
 
 from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.common import ApiResponse
@@ -14,6 +19,9 @@ from backend.app.services.genai_underwriting_service import (
 )
 from backend.app.services.underwriting_report_service import (
     underwriting_report_service,
+)
+from backend.app.services.genai_generation_history_service import (
+    record_generation,
 )
 
 from backend.app.core.responses import success_response
@@ -36,6 +44,7 @@ def analyze_underwriting(
     borrower: Borrower360,
     underwriting: UnderwritingResult,
     request: Request,
+    db: Session = Depends(get_db),
 ):
     application_id = underwriting.application_id
 
@@ -95,6 +104,16 @@ def analyze_underwriting(
         response_data = GenAIUnderwritingResult.model_validate(result)
 
     except ValueError as exc:
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_ANALYSIS",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code="GENAI_UNDERWRITING_VALIDATION_FAILED",
+        )
         log_workflow_event(
             workflow="genai_underwriting_analysis",
             event="failed",
@@ -128,6 +147,17 @@ def analyze_underwriting(
                 "GENAI_GENERATION_FAILED",
             }
             else "GENAI_PROVIDER_ERROR"
+        )
+
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_ANALYSIS",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code=safe_error_code,
         )
 
         log_workflow_event(
@@ -166,6 +196,16 @@ def analyze_underwriting(
         ) from exc
 
     except Exception:
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_ANALYSIS",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code="GENAI_UNDERWRITING_FAILED",
+        )
         log_workflow_event(
             workflow="genai_underwriting_analysis",
             event="failed",
@@ -176,6 +216,18 @@ def analyze_underwriting(
             error_code="GENAI_UNDERWRITING_FAILED",
         )
         raise
+
+    record_generation(
+        db,
+        application_id=application_id,
+        generation_type="UNDERWRITING_ANALYSIS",
+        status="COMPLETED",
+        request_reference=get_request_id(request),
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        model_name=getattr(response_data, "model_name", None),
+        model_version=getattr(response_data, "model_version", None),
+        validation_status="PASSED",
+    )
 
     response = success_response(
         request=request,
@@ -211,8 +263,10 @@ def generate_underwriting_report(
     borrower: Borrower360,
     underwriting: UnderwritingResult,
     request: Request,
+    db: Session = Depends(get_db),
 ) -> ApiResponse[UnderwritingReport]:
     application_id = underwriting.application_id
+    started_at = time.perf_counter()
 
     log_workflow_event(
         workflow="underwriting_report_generation",
@@ -256,6 +310,16 @@ def generate_underwriting_report(
         )
 
     except ValueError as exc:
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_REPORT",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code="UNDERWRITING_REPORT_GENERATION_REJECTED",
+        )
         log_workflow_event(
             workflow="underwriting_report_generation",
             event="failed",
@@ -272,6 +336,21 @@ def generate_underwriting_report(
 
     except RuntimeError as exc:
         error_code = str(exc)
+
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_REPORT",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code=(
+                error_code.split(":", 1)[0]
+                if error_code.startswith("GENAI_")
+                else "UNDERWRITING_REPORT_GENERATION_FAILED"
+            ),
+        )
 
         is_provider_error = (
             error_code.startswith("GENAI_")
@@ -304,6 +383,16 @@ def generate_underwriting_report(
         ) from exc
 
     except Exception:
+        record_generation(
+            db,
+            application_id=application_id,
+            generation_type="UNDERWRITING_REPORT",
+            status="FAILED",
+            request_reference=get_request_id(request),
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+            validation_status="FAILED",
+            error_code="UNDERWRITING_REPORT_GENERATION_FAILED",
+        )
         log_workflow_event(
             workflow="underwriting_report_generation",
             event="failed",
@@ -314,6 +403,19 @@ def generate_underwriting_report(
             error_code="UNDERWRITING_REPORT_GENERATION_FAILED",
         )
         raise
+
+    
+    record_generation(
+        db,
+        application_id=application_id,
+        generation_type="UNDERWRITING_REPORT",
+        status="COMPLETED",
+        request_reference=get_request_id(request),
+        duration_ms=int((time.perf_counter() - started_at) * 1000),
+        model_name=getattr(genai_result, "model_name", None),
+        model_version=getattr(genai_result, "model_version", None),
+        validation_status="PASSED",
+    )
 
     log_workflow_event(
         workflow="underwriting_report_generation",
