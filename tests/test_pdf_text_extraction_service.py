@@ -99,3 +99,81 @@ def test_reject_extracted_text_larger_than_limit(monkeypatch):
 
     with pytest.raises(ValueError, match="DOCUMENT_PDF_TEXT_TOO_LONG"):
         service.extract_text(b"%PDF-1.7\nmock PDF content")
+
+
+
+def test_ocr_fallback_extracts_text_from_scanned_pdf(monkeypatch):
+    install_fake_reader(monkeypatch, [FakePage(None)])
+    monkeypatch.setenv("PDF_OCR_ENABLED", "true")
+
+    service = PDFTextExtractionService()
+    monkeypatch.setattr(
+        service,
+        "_ocr_page",
+        lambda pdf_bytes, page_index: (
+            "Bank statement period March 2026 closing balance INR 120000"
+        ),
+    )
+
+    result = service.extract_text(b"%PDF-1.7\nmock PDF content")
+
+    assert "Bank statement period March 2026" in result
+    assert "closing balance INR 120000" in result
+
+
+def test_ocr_fallback_preserves_page_order(monkeypatch):
+    install_fake_reader(
+        monkeypatch,
+        [
+            FakePage("Page one: account holder details"),
+            FakePage(None),
+            FakePage("Page three: transaction summary"),
+        ],
+    )
+    monkeypatch.setenv("PDF_OCR_ENABLED", "true")
+
+    service = PDFTextExtractionService()
+    monkeypatch.setattr(
+        service,
+        "_ocr_page",
+        lambda pdf_bytes, page_index: (
+            "Page two: account balance details"
+        ),
+    )
+
+    result = service.extract_text(b"%PDF-1.7\nmock PDF content")
+
+    assert result.index("Page one") < result.index("Page two")
+    assert result.index("Page two") < result.index("Page three")
+
+
+def test_ocr_fallback_rejects_empty_ocr_result(monkeypatch):
+    install_fake_reader(monkeypatch, [FakePage(None)])
+    monkeypatch.setenv("PDF_OCR_ENABLED", "true")
+
+    service = PDFTextExtractionService()
+    monkeypatch.setattr(
+        service,
+        "_ocr_page",
+        lambda pdf_bytes, page_index: "   ",
+    )
+
+    with pytest.raises(ValueError, match="DOCUMENT_PDF_OCR_NO_TEXT"):
+        service.extract_text(b"%PDF-1.7\nmock PDF content")
+
+
+def test_ocr_fallback_rejects_text_over_limit(monkeypatch):
+    install_fake_reader(monkeypatch, [FakePage(None)])
+    monkeypatch.setenv("PDF_OCR_ENABLED", "true")
+
+    service = PDFTextExtractionService()
+    monkeypatch.setattr(
+        service,
+        "_ocr_page",
+        lambda pdf_bytes, page_index: "A" * (
+            service.MAX_TEXT_CHARS + 1
+        ),
+    )
+
+    with pytest.raises(ValueError, match="DOCUMENT_PDF_TEXT_TOO_LONG"):
+        service.extract_text(b"%PDF-1.7\nmock PDF content")
