@@ -29,9 +29,12 @@ type ApplicationsData = {
     items: ApplicationItem[];
 };
 
-export async function getApplications(): Promise<ApplicationsData> {
+export async function getApplications(
+    token: string,
+): Promise<ApplicationsData> {
     const response = await api.get<ApiResponse<ApplicationsData>>(
         "/operations/applications?limit=50&offset=0",
+        token,
     );
 
     if (!response.success || response.data === null) {

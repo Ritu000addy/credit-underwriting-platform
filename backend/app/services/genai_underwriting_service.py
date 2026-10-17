@@ -969,7 +969,17 @@ EVIDENCE:
             return None
 
         risk = underwriting.risk_assessment
-        if risk and risk.risk_segment == "HIGH_RISK":
+
+        if not risk or not risk.risk_segment:
+            return narrative
+
+        normalized = narrative.lower()
+
+        risk_segment = risk.risk_segment.upper()
+
+        prohibited_phrases: tuple[str, ...] = ()
+
+        if risk_segment == "HIGH_RISK":
             prohibited_phrases = (
                 "low risk",
                 "low-risk",
@@ -977,11 +987,28 @@ EVIDENCE:
                 "medium-risk",
             )
 
-            normalized = narrative.lower()
-            if any(phrase in normalized for phrase in prohibited_phrases):
-                return None
+        elif risk_segment == "LOW_RISK":
+            prohibited_phrases = (
+                "high risk",
+                "high-risk",
+            )
+
+        elif risk_segment == "MEDIUM_RISK":
+            prohibited_phrases = (
+                "low risk",
+                "low-risk",
+                "high risk",
+                "high-risk",
+            )
+
+        if any(
+            phrase in normalized
+            for phrase in prohibited_phrases
+        ):
+            return None
 
         return narrative
+            
 
 
 genai_underwriting_service = GenAIUnderwritingService()

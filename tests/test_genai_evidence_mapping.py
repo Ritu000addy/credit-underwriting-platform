@@ -1,5 +1,7 @@
 from backend.app.schemas.borrower360 import Borrower360
 from backend.app.schemas.underwriting import UnderwritingResult
+from backend.app.schemas.risk_assessment import RiskAssessmentResult
+
 from backend.app.services.genai_underwriting_service import (
     genai_underwriting_service,
 )
@@ -93,3 +95,83 @@ def test_genai_evidence_mapping_uses_minimized_synthetic_data():
     assert evidence["documents"]["payslip_count"] == 1
 
     assert evidence["strengths"] == ["Synthetic test strength"]
+
+
+def test_high_risk_narrative_rejects_lower_risk_classifications():
+    underwriting = UnderwritingResult(
+        application_id="SYN-APP-001",
+        customer_id="SYN-CUST-001",
+        risk_assessment=RiskAssessmentResult(
+            status="COMPLETED",
+            risk_segment="HIGH_RISK",
+        ),
+    )
+
+    for narrative in (
+        "The borrower is low risk.",
+        "The borrower is low-risk.",
+        "The borrower is medium risk.",
+        "The borrower is medium-risk.",
+    ):
+        result = genai_underwriting_service._validate_llm_narrative(
+            narrative=narrative,
+            underwriting=underwriting,
+        )
+        assert result is None
+
+
+def test_low_risk_narrative_rejects_high_risk_classification():
+    underwriting = UnderwritingResult(
+        application_id="SYN-APP-002",
+        customer_id="SYN-CUST-002",
+        risk_assessment=RiskAssessmentResult(
+            status="COMPLETED",
+            risk_segment="LOW_RISK",
+        ),
+    )
+
+    result = genai_underwriting_service._validate_llm_narrative(
+        narrative="The borrower is high risk.",
+        underwriting=underwriting,
+    )
+
+    assert result is None
+
+
+def test_valid_narrative_is_preserved():
+    underwriting = UnderwritingResult(
+        application_id="SYN-APP-003",
+        customer_id="SYN-CUST-003",
+        risk_assessment=RiskAssessmentResult(
+            status="COMPLETED",
+            risk_segment="HIGH_RISK",
+        ),
+    )
+
+    narrative = (
+        "The application is classified as high risk. "
+        "Further review is recommended."
+    )
+
+    result = genai_underwriting_service._validate_llm_narrative(
+        narrative=narrative,
+        underwriting=underwriting,
+    )
+
+    assert result == narrative
+
+
+def test_narrative_without_risk_assessment_is_preserved():
+    underwriting = UnderwritingResult(
+        application_id="SYN-APP-004",
+        customer_id="SYN-CUST-004",
+    )
+
+    narrative = "Further document verification is recommended."
+
+    result = genai_underwriting_service._validate_llm_narrative(
+        narrative=narrative,
+        underwriting=underwriting,
+    )
+
+    assert result == narrative

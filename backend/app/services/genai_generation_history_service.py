@@ -3,11 +3,13 @@ import logging
 import os
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.models.genai_generation_history import (
     GenAIGenerationHistory,
 )
+from backend.app.models.loan_application import LoanApplication
 
 
 logger = logging.getLogger("backend.workflow")
@@ -42,9 +44,26 @@ def record_generation(
     elif model_name and model_name.startswith("DEV-RULE-BASED-GENAI"):
         provider = "NONE"
 
+        history_application_id = application_id
+
+    if application_id:
+        application_exists = db.scalar(
+            select(LoanApplication.application_id).where(
+                LoanApplication.application_id == application_id
+            )
+        )
+
+        if application_exists is None:
+            logger.warning(
+                "genai_history_application_not_found "
+                "application_id=%s; storing history without application link",
+                application_id,
+            )
+            history_application_id = None
+
     record = GenAIGenerationHistory(
         generation_id=f"GENAI-{uuid.uuid4().hex}",
-        application_id=application_id,
+        application_id=history_application_id,
         generation_type=generation_type,
         status=status,
         provider=provider,
